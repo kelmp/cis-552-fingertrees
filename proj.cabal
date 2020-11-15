@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c357e48b072362f20f6e24881945792facf2feca3c6f0cfe8b457c289d450f99
+-- hash: 31126a35dcdcfbaf2a3161c3ae6185aa6a3e3eb72947d27d55a77df946e14178
 
 name:           proj
 version:        0.1.0.0
@@ -28,8 +28,6 @@ source-repository head
 library
   exposed-modules:
       FingerTree
-      Lib
-      Main
   other-modules:
       Paths_proj
   hs-source-dirs:
