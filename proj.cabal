@@ -52,7 +52,7 @@ executable proj-exe
 
 test-suite proj-test
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Tests.hs
   other-modules:
       Benchmark
       Tests
@@ -63,4 +63,6 @@ test-suite proj-test
   build-depends:
       base >=4.7 && <5
     , proj
+    , HUnit
+    , QuickCheck
   default-language: Haskell2010

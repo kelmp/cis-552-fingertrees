@@ -19,6 +19,7 @@ testAll = do
             tToList
           ]
       )
+  ()
 
 quickCheckN :: Test.QuickCheck.Testable prop => Int -> prop -> IO ()
 quickCheckN n = quickCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
