@@ -1,13 +1,26 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 
-module FingerTree(FingerTree, insertHead, insertTail, head, tail,
-                  isEmpty, concat, split, map, toList) where
+module FingerTree
+  ( FingerTree,
+    insertHead,
+    insertTail,
+    FingerTree.head,
+    FingerTree.tail,
+    isEmpty,
+    FingerTree.concat,
+    split,
+    FingerTree.map,
+    FingerTree.toList,
+  )
+where
 
 import Control.Applicative
 import Control.Monad
 import Data.Foldable
 import Data.Functor
 import Data.Monoid
+import Data.Semigroup
 import Data.Traversable
 
 data FingerTree a
@@ -45,24 +58,21 @@ instance Applicative FingerTree where
   (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
   t1 <*> t2 = undefined
 
-instance Monoid FingerTree where
+instance Monoid (FingerTree a) where
   mempty :: FingerTree a
   mempty = undefined
 
-  (<>) :: FingerTree a -> FingerTree a -> FingerTree a  
-  t1 <> t2 = undefined
-
-  mconcat :: [FingerTree a] -> FingerTree a
-  mconcat = undefined
+instance Semigroup (FingerTree a) where
+  (<>) = undefined
 
 instance Foldable FingerTree where
   foldMap :: Monoid m => (a -> m) -> FingerTree a -> m
   foldMap f t = undefined
 
   foldr :: (a -> b -> b) -> b -> FingerTree a -> b
-  folr f b t = undefined
+  foldr f b t = undefined
 
-instance Traversable Tree where
+instance Traversable FingerTree where
   traverse :: Applicative z => (a -> z b) -> FingerTree a -> z (FingerTree b)
   traverse f t = undefined
 
