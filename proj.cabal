@@ -56,7 +56,6 @@ test-suite proj-test
   main-is: Tests.hs
   other-modules:
       Benchmark
-      Tests
       Paths_proj
   hs-source-dirs:
       test
