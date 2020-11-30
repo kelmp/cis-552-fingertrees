@@ -11,7 +11,8 @@ module FingerTree
     append,
     split,
     toList,
-    fromList
+    fromList,
+    removeTail,
   )
 where
 
@@ -80,16 +81,29 @@ instance Traversable FingerTree where
 ------ Functions ------
 
 insertHead :: a -> FingerTree a -> FingerTree a
-insertHead x t = undefined
+insertHead a Nil = Unit a
+insertHead a (Unit b) = More (One a) Nil (One b)
+insertHead a (More (One b) ft r) = More (Two a b) ft r
+insertHead a (More (Two b c) ft r) = More (Three a b c) ft r
+insertHead a (More (Three b c d) ft r) =
+  More (Two a b) (insertHead (Pair c d) ft) r
 
 insertTail :: a -> FingerTree a -> FingerTree a
-insertTail x t = undefined
+insertTail z Nil = Unit z
+insertTail z (Unit a) = More (One a) Nil (One z)
+insertTail z (More l ft (One a)) = More l ft (Two a z)
+insertTail z (More l ft (Two a b)) = More l ft (Three a b z)
+insertTail z (More l ft (Three a b c)) =
+  More l (insertTail (Pair a b) ft) (Two c z)
 
-head :: FingerTree a -> a
+head :: FingerTree a -> Maybe a
 head t = undefined
 
-tail :: FingerTree a -> a
+tail :: FingerTree a -> Maybe a
 tail t = undefined
+
+removeTail :: FingerTree a -> FingerTree a
+removeTail = undefined
 
 isEmpty :: FingerTree a -> Bool
 isEmpty t = undefined
@@ -103,8 +117,11 @@ split t = undefined
 toList :: FingerTree a -> [a]
 toList t = undefined
 
+ft8 :: FingerTree Int
+ft8 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
+
 fromList :: [a] -> FingerTree a
-fromList l = undefined
+fromList = foldr insertTail Nil
 
 instance (Show a, Arbitrary a) => Arbitrary (FingerTree a) where
   arbitrary = undefined
