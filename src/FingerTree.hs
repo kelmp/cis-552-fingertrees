@@ -2,26 +2,27 @@
 {-# LANGUAGE InstanceSigs #-}
 
 module FingerTree
-  ( FingerTree,
+  ( FingerTree (..),
     insertHead,
     insertTail,
     FingerTree.head,
     FingerTree.tail,
     isEmpty,
-    FingerTree.concat,
+    append,
     split,
-    FingerTree.map,
-    FingerTree.toList,
+    toList,
+    fromList
   )
 where
 
-import Control.Applicative
-import Control.Monad
-import Data.Foldable
-import Data.Functor
-import Data.Monoid
-import Data.Semigroup
-import Data.Traversable
+import Control.Applicative ()
+import Control.Monad ()
+import Data.Foldable ()
+import Data.Functor ()
+import Data.Monoid ()
+import Data.Semigroup ()
+import Data.Traversable ()
+import Test.QuickCheck
 
 data FingerTree a
   = Nil
@@ -60,7 +61,7 @@ instance Applicative FingerTree where
 
 instance Monoid (FingerTree a) where
   mempty :: FingerTree a
-  mempty = undefined
+  mempty = Nil
 
 instance Semigroup (FingerTree a) where
   (<>) = undefined
@@ -93,14 +94,18 @@ tail t = undefined
 isEmpty :: FingerTree a -> Bool
 isEmpty t = undefined
 
-concat :: FingerTree a -> FingerTree a -> FingerTree a
-concat t1 t2 = undefined
+append :: FingerTree a -> FingerTree a -> FingerTree a
+append t1 t2 = undefined
 
 split :: FingerTree a -> (FingerTree a, FingerTree a)
 split t = undefined
 
-map :: (a -> b) -> FingerTree a -> FingerTree b
-map f t = undefined
-
 toList :: FingerTree a -> [a]
 toList t = undefined
+
+fromList :: [a] -> FingerTree a
+fromList l = undefined
+
+instance (Show a, Arbitrary a) => Arbitrary (FingerTree a) where
+  arbitrary = undefined
+  shrink = undefined
