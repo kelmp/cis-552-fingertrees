@@ -1,4 +1,4 @@
-import FingerTree
+import FingerTree.hs
 import Test.HUnit
 import Test.QuickCheck
 
@@ -26,6 +26,8 @@ quickCheckN n = quickCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
 verboseCheckN :: Test.QuickCheck.Testable prop => Int -> prop -> IO ()
 verboseCheckN n = verboseCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
 
+-- FingerTree Tests --
+
 tConstruct :: Test
 tConstruct =
   TestList
@@ -36,3 +38,7 @@ tConstruct =
 
 tInsertHead :: Test
 tInsertHead = undefined
+
+-- Priority Queue Tests --
+
+-- Sequence Tests --
