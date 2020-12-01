@@ -2,18 +2,21 @@
 
 import Data.Maybe as Maybe
 import FingerTree
--- ( FingerTree (..),
---   append,
---   fromList,
---   head,
---   insertHead,
---   insertTail,
---   isEmpty,
---   removeTail,
---   split,
---   tail,
---   toList,
--- )
+  ( FingerTree (..),
+    append,
+    concat,
+    fromList,
+    head,
+    insertHead,
+    insertTail,
+    isEmpty,
+    last,
+    length,
+    removeTail,
+    split,
+    tail,
+    toList,
+  )
 import Test.HUnit
 import Test.QuickCheck
 
@@ -58,9 +61,11 @@ verboseCheckN n = verboseCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
 -- (1) fill in unit tests
 -- (2) add quickcheck properties for all the functions
 -- (3) add quickcheck properties for remaining type-classes that FingerTrees implements
--- (3) create a quickcheck property that checks if its a valid Finger Tree (not sure how exactly this will be defines)
+-- (3) create a quickcheck property that checks if its a valid Finger Tree
+--     (not sure how exactly this will be defined)
 --     and use that to replace AVL_prop preoprty
--- (4) add unit tests and quickcheck properties for priority queues and sequences
+-- (4) add unit tests and quickcheck properties for priority queues
+--     and sequences
 
 ftEmpty :: FingerTree Int
 ftEmpty = Nil
@@ -145,22 +150,23 @@ tHead =
       "Head unit" ~: FingerTree.head ft1 ~?= Just 1,
       "Head more (one ...)" ~: FingerTree.head ft9 ~?= Just 1,
       "Head more (two ....)" ~: FingerTree.head (insertHead 0 ft9) ~?= Just 0,
-      "Head more (three ....)" ~: FingerTree.head (insertHead (-1) (insertHead 0 ft9)) ~?= Just (-1)
+      "Head more (three ....)"
+        ~: FingerTree.head (insertHead (-1) (insertHead 0 ft9)) ~?= Just (-1)
     ]
 
-tTail :: Test
-tTail =
+tLastTest :: Test
+tLastTest =
   TestList
-    [ "Tail empty" ~: FingerTree.tail ftEmpty ~?= Nothing,
-      "Tail 1" ~: FingerTree.tail ft1 ~?= Just 1,
-      "Tail 2" ~: FingerTree.tail ft2 ~?= Just 2,
-      "Tail 3" ~: FingerTree.tail ft3 ~?= Just 3,
-      "Tail 4" ~: FingerTree.tail ft4 ~?= Just 4,
-      "Tail 5" ~: FingerTree.tail ft5 ~?= Just 5,
-      "Tail 6" ~: FingerTree.tail ft6 ~?= Just 6,
-      "Tail 7" ~: FingerTree.tail ft7 ~?= Just 7,
-      "Tail 8" ~: FingerTree.tail ft8 ~?= Just 8,
-      "Tail 9" ~: FingerTree.tail ft9 ~?= Just 9
+    [ "Last empty" ~: FingerTree.last ftEmpty ~?= Nothing,
+      "Last 1" ~: FingerTree.last ft1 ~?= Just 1,
+      "Last 2" ~: FingerTree.last ft2 ~?= Just 2,
+      "Last 3" ~: FingerTree.last ft3 ~?= Just 3,
+      "Last 4" ~: FingerTree.last ft4 ~?= Just 4,
+      "Last 5" ~: FingerTree.last ft5 ~?= Just 5,
+      "Last 6" ~: FingerTree.last ft6 ~?= Just 6,
+      "Last 7" ~: FingerTree.last ft7 ~?= Just 7,
+      "Last 8" ~: FingerTree.last ft8 ~?= Just 8,
+      "Last 9" ~: FingerTree.last ft9 ~?= Just 9
     ]
 
 tRemoveTail :: Test
@@ -186,6 +192,11 @@ tIsEmpty =
         ~: all isEmpty [ft1, ft2, ft3, ft4, ft5, ft6, ft7, ft8, ft9]
         ~?= True
     ]
+
+tTail :: Test
+tTail =
+  TestList
+    []
 
 tAppend :: Test
 tAppend =
@@ -245,16 +256,16 @@ tFromList =
 tLength :: Test
 tLength =
   TestList
-    [ "Length empty" ~: length ftEmpty ~?= 0,
-      "Length 1" ~: length ft1 ~?= 1,
-      "Length 2" ~: length ft2 ~?= 2,
-      "Length 3" ~: length ft3 ~?= 3,
-      "Length 4" ~: length ft4 ~?= 4,
-      "Length 5" ~: length ft5 ~?= 5,
-      "Length 6" ~: length ft6 ~?= 6,
-      "Length 7" ~: length ft7 ~?= 7,
-      "Length 8" ~: length ft8 ~?= 8,
-      "Length 9" ~: length ft9 ~?= 9
+    [ "Length empty" ~: FingerTree.length ftEmpty ~?= 0,
+      "Length 1" ~: FingerTree.length ft1 ~?= 1,
+      "Length 2" ~: FingerTree.length ft2 ~?= 2,
+      "Length 3" ~: FingerTree.length ft3 ~?= 3,
+      "Length 4" ~: FingerTree.length ft4 ~?= 4,
+      "Length 5" ~: FingerTree.length ft5 ~?= 5,
+      "Length 6" ~: FingerTree.length ft6 ~?= 6,
+      "Length 7" ~: FingerTree.length ft7 ~?= 7,
+      "Length 8" ~: FingerTree.length ft8 ~?= 8,
+      "Length 9" ~: FingerTree.length ft9 ~?= 9
     ]
 
 -- tContains :: Test
@@ -293,7 +304,7 @@ prop_insertHeadFirst t x =
 prop_insertTailTail :: Eq a => FingerTree a -> a -> Bool
 prop_insertTailTail t x =
   let newTree = insertTail x t
-   in case FingerTree.tail newTree of
+   in case FingerTree.last newTree of
         Nothing -> False
         Just v -> v == x
 
@@ -328,15 +339,15 @@ prop_split :: Eq a => FingerTree a -> Bool
 prop_split t =
   let (t1, t2) = split t
    in FingerTree.head t == FingerTree.head t1
-        && FingerTree.tail t1 == FingerTree.tail t2
+        && FingerTree.last t1 == FingerTree.last t2
 
 -- i. concat
 prop_concat :: Eq a => [FingerTree a] -> Bool
 prop_concat [] = True
 prop_concat l =
   let t = FingerTree.concat l
-   in (FingerTree.head (Prelude.head l)) == FingerTree.head t
-        && (FingerTree.tail (Prelude.last t)) == FingerTree.tail t
+   in FingerTree.head (Prelude.head l) == FingerTree.head t
+        && FingerTree.last (Prelude.last t) == FingerTree.last t
 
 -- j. toList
 -- no post-conditional properties

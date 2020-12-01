@@ -15,6 +15,7 @@ module FingerTree
     removeTail,
     FingerTree.concat,
     FingerTree.length,
+    FingerTree.last,
   )
 where
 
@@ -27,10 +28,10 @@ import Data.Semigroup ()
 import Data.Traversable ()
 import Test.QuickCheck
 
-data FingerTree a
+data FingerTree v a
   = Nil
   | Unit a
-  | More (Some a) (FingerTree (Tuple a)) (Some a)
+  | More (Some a) (FingerTree v (Tuple a)) (Some a)
   deriving (Eq, Show)
 
 data Some a
@@ -99,10 +100,28 @@ insertTail z (More l ft (Three a b c)) =
   More l (insertTail (Pair a b) ft) (Two c z)
 
 head :: FingerTree a -> Maybe a
-head t = undefined
+head Nil = Nothing
+head (Unit x) = Just x
+head (More (One x) _ _) = Just x
+head (More (Two x _) _ _) = Just x
+head (More (Three x _ _) _ _) = Just x
 
-tail :: FingerTree a -> Maybe a
-tail t = undefined
+tail :: FingerTree a -> Maybe (FingerTree a)
+tail (More (Three _ x y) ft r) = Just $ More (Two x y) ft r
+tail (More (Two _ x) ft r) = Just $ More (One x) ft r
+tail (More (One _) ft r) = case (ft, r) of
+  (Nil, One x) -> Just $ Unit x
+  (Nil, Two x y) -> Just $ More (One x) Nil (One y)
+  (Nil, Three x y z) -> Just $ More (One x) Nil (Two y z)
+  otherwise -> case FingerTree.head ft of
+    Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
+
+last :: FingerTree a -> Maybe a
+last Nil = Nothing
+last (Unit x) = Just x
+last (More _ _ (One x)) = Just x
+last (More _ _ (Two _ x)) = Just x
+last (More _ _ (Three _ _ x)) = Just x
 
 removeTail :: FingerTree a -> FingerTree a
 removeTail = undefined
@@ -111,9 +130,27 @@ isEmpty :: FingerTree a -> Bool
 isEmpty t = undefined
 
 append :: FingerTree a -> FingerTree a -> FingerTree a
-append t1 t2 = undefined
+append t1 t2 = glue t1 [] t2
 
-split :: FingerTree a -> (FingerTree a, FingerTree a)
+glue :: FingerTree a -> [a] -> FingerTree a -> FingerTree a
+glue Nil l t2 = foldr insertHead t2 l
+glue t1 l Nil = foldl (flip insertTail) t1 l
+glue (Unit x) l t2 = foldr insertHead t2 (x : l)
+glue t1 l (Unit y) = foldl (flip insertTail) t1 (l ++ [y])
+glue (More x1 t1 y1) l (More x2 t2 y2) =
+  More x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
+
+someToList :: Some a -> [a]
+someToList (One x) = [x]
+someToList (Two x y) = [x, y]
+
+listToTuples :: [a] -> [Tuple a]
+listToTuples [] = []
+listToTuples [x, y] = [Pair x y]
+listToTuples [x, y, z, w] = [Pair x y, Pair z w]
+listToTuples (x : y : z : xs) = Triple x y z : listToTuples xs
+
+split :: Measured v a => (v -> Bool) -> FingerTree v a -> (FingerTree v a, FingerTree v a)
 split t = undefined
 
 concat :: [FingerTree a] -> FingerTree a
