@@ -28,10 +28,16 @@ import Data.Semigroup ()
 import Data.Traversable ()
 import Test.QuickCheck
 
-data FingerTree v a
+-- data FingerTree v a
+--   = Nil
+--   | Unit a
+--   | More (Some a) (FingerTree v (Tuple a)) (Some a)
+--   deriving (Eq, Show)
+
+data FingerTree a
   = Nil
   | Unit a
-  | More (Some a) (FingerTree v (Tuple a)) (Some a)
+  | More (Some a) (FingerTree (Tuple a)) (Some a)
   deriving (Eq, Show)
 
 data Some a
@@ -113,8 +119,9 @@ tail (More (One _) ft r) = case (ft, r) of
   (Nil, One x) -> Just $ Unit x
   (Nil, Two x y) -> Just $ More (One x) Nil (One y)
   (Nil, Three x y z) -> Just $ More (One x) Nil (Two y z)
-  otherwise -> case FingerTree.head ft of
-    Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
+  _ -> undefined
+  -- case FingerTree.head ft of
+  --   Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
 
 last :: FingerTree a -> Maybe a
 last Nil = Nothing
@@ -130,7 +137,7 @@ isEmpty :: FingerTree a -> Bool
 isEmpty t = undefined
 
 append :: FingerTree a -> FingerTree a -> FingerTree a
-append t1 t2 = glue t1 [] t2
+append t1 = glue t1 []
 
 glue :: FingerTree a -> [a] -> FingerTree a -> FingerTree a
 glue Nil l t2 = foldr insertHead t2 l
@@ -150,7 +157,9 @@ listToTuples [x, y] = [Pair x y]
 listToTuples [x, y, z, w] = [Pair x y, Pair z w]
 listToTuples (x : y : z : xs) = Triple x y z : listToTuples xs
 
-split :: Measured v a => (v -> Bool) -> FingerTree v a -> (FingerTree v a, FingerTree v a)
+-- split :: Measured v a => (v -> Bool) -> FingerTree v a -> (FingerTree v a, FingerTree v a)
+-- split t = undefined
+
 split t = undefined
 
 concat :: [FingerTree a] -> FingerTree a

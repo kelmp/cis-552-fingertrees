@@ -19,6 +19,7 @@ import FingerTree
   )
 import Test.HUnit
 import Test.QuickCheck
+import Data.FingerTree as FT
 
 main :: IO ()
 main = testAll
@@ -332,6 +333,12 @@ prop_removeTailChanged t =
 
 -- g. append
 -- is append just the same as concat?? I dont think we need both
+prop_append :: FingerTree a -> FingerTree a -> Bool
+prop_append t1 t2 = let t = append t1 t2 in
+  FingerTree.head t1 == FingerTreee.head t &&
+  FingerTree.last t2 == FingerTree.last t &&
+  toList t == toList t1 ++ toList t2
+
 
 -- h. split
 -- not sure this is the best property?
@@ -360,7 +367,38 @@ prop_concat l =
 
 -- (2) Metamorphic Properties (Bulk of the testing):
 
+-- insert at head and then remove head, should be previous head
+-- insert at tail adn then remove tail, should be previous tail
+-- insert twice and then remove to check that they are still there
+-- isempty -> insert -> should no longer be empty
+-- insert head, insert tail and append trees 
+-- append two finger trees, then split them
+
 -- (3) Model-Based Poperties (could just use lists for now?)
+prop_modelInsertHead :: Eq a => [a] -> Bool
+prop_modelInsertHead l = let myTree = foldr insertHead Nil l in 
+                          let modelTree = foldr FT.(<|) FT.empty l in
+                            FT.toList modelTree == FT.toList myTree
+
+prop_modelInsertTail :: Eq a =>[a] -> Bool
+prop_modelInsertTail l = let myTree = foldr insertTail Nil l in 
+                          let modelTree = foldr FT.(|>) FT.empty l in
+                            FT.toList modelTree == FT.toList myTree 
+
+prop_modelFromList :: Eq a => [a] -> Bool
+prop_modelFromListHead l = let myTree = fromList l in
+                         let modelTree = FT.fromList l in
+                          FingerTree.head myTree == FT.head modelTree
+
+prop_modelFromList :: Eq a => [a] -> Bool
+prop_modelFromListTail l = let myTree = fromList l in
+                         let modelTree = FT.fromList l in
+                          FingerTree.last myTree == FT.last modelTree
+
+prop_modelFromListEveryElement :: Eq a => [a] -> Bool
+prop_modelFromListEveryElement l = let myTree = fromList l in 
+                                    let modelTree = FT.fromList l in
+                                       
 
 prop_length :: FingerTree Int -> Bool
 prop_length ft = Maybe.isJust (count ft)

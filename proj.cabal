@@ -65,4 +65,5 @@ test-suite proj-test
     , proj
     , HUnit
     , QuickCheck
+    , criterion
   default-language: Haskell2010
