@@ -13,6 +13,8 @@ module FingerTree
     toList,
     fromList,
     removeTail,
+    FingerTree.concat,
+    FingerTree.length,
   )
 where
 
@@ -114,11 +116,17 @@ append t1 t2 = undefined
 split :: FingerTree a -> (FingerTree a, FingerTree a)
 split t = undefined
 
+concat :: [FingerTree a] -> FingerTree a
+concat l = undefined
+
 toList :: FingerTree a -> [a]
 toList t = undefined
 
-ft8 :: FingerTree Int
-ft8 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
+length :: FingerTree a -> Int
+length = undefined
+
+-- ft8 :: FingerTree Int
+-- ft8 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
 
 fromList :: [a] -> FingerTree a
 fromList = foldr insertTail Nil

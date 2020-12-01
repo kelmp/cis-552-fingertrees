@@ -1,7 +1,19 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Data.Maybe as Maybe
-import FingerTree (FingerTree (..), fromList, insertHead)
+import FingerTree
+-- ( FingerTree (..),
+--   append,
+--   fromList,
+--   head,
+--   insertHead,
+--   insertTail,
+--   isEmpty,
+--   removeTail,
+--   split,
+--   tail,
+--   toList,
+-- )
 import Test.HUnit
 import Test.QuickCheck
 
@@ -20,15 +32,15 @@ allHUnit = do
     runTestTT
       ( TestList
           [ tToList,
-            tConstruct,
+            -- tConstruct,
             tInsertHead,
             tInsertTail,
             tHead,
             tTail,
             tIsEmpty,
             tConcat,
-            tSplit,
-            tMap
+            tSplit
+            -- tMap
           ]
       )
   putStrLn ""
@@ -105,8 +117,11 @@ tInsertHead =
           )
         ~?= More
           (Two 9 8)
-          More
-          ((Two (Pair 7 6) (Pair 5 4)) Nil (One (Pair 3 2)))
+          ( More
+              (Two (Pair 7 6) (Pair 5 4))
+              Nil
+              (One (Pair 3 2))
+          )
           (One 1)
     ]
 
@@ -126,26 +141,26 @@ tInsertTail =
 tHead :: Test
 tHead =
   TestList
-    [ "Head empty" ~: head ftEmpty ~?= Nothing,
-      "Head unit" ~: head ft1 ~?= Just 1,
-      "Head more (one ...)" ~: head ft9 ~?= Just 1,
-      "Head more (two ....)" ~: head (insertHead 0 ft9) ~?= Just 0,
-      "Head more (three ....)" ~: head (insertHead (-1) (insertHead 0 ft9)) ~?= Just (-1)
+    [ "Head empty" ~: FingerTree.head ftEmpty ~?= Nothing,
+      "Head unit" ~: FingerTree.head ft1 ~?= Just 1,
+      "Head more (one ...)" ~: FingerTree.head ft9 ~?= Just 1,
+      "Head more (two ....)" ~: FingerTree.head (insertHead 0 ft9) ~?= Just 0,
+      "Head more (three ....)" ~: FingerTree.head (insertHead (-1) (insertHead 0 ft9)) ~?= Just (-1)
     ]
 
 tTail :: Test
 tTail =
   TestList
-    [ "Tail empty" ~: tail ftEmpty ~?= Nothing,
-      "Tail 1" ~: tail ft1 ~?= Just 1,
-      "Tail 2" ~: tail ft2 ~?= Just 2,
-      "Tail 3" ~: tail ft3 ~?= Just 3,
-      "Tail 4" ~: tail ft4 ~?= Just 4,
-      "Tail 5" ~: tail ft5 ~?= Just 5,
-      "Tail 6" ~: tail ft6 ~?= Just 6,
-      "Tail 7" ~: tail ft7 ~?= Just 7,
-      "Tail 8" ~: tail ft8 ~?= Just 8,
-      "Tail 9" ~: tail ft9 ~?= Just 9
+    [ "Tail empty" ~: FingerTree.tail ftEmpty ~?= Nothing,
+      "Tail 1" ~: FingerTree.tail ft1 ~?= Just 1,
+      "Tail 2" ~: FingerTree.tail ft2 ~?= Just 2,
+      "Tail 3" ~: FingerTree.tail ft3 ~?= Just 3,
+      "Tail 4" ~: FingerTree.tail ft4 ~?= Just 4,
+      "Tail 5" ~: FingerTree.tail ft5 ~?= Just 5,
+      "Tail 6" ~: FingerTree.tail ft6 ~?= Just 6,
+      "Tail 7" ~: FingerTree.tail ft7 ~?= Just 7,
+      "Tail 8" ~: FingerTree.tail ft8 ~?= Just 8,
+      "Tail 9" ~: FingerTree.tail ft9 ~?= Just 9
     ]
 
 tRemoveTail :: Test
@@ -168,44 +183,173 @@ tIsEmpty =
   TestList
     [ "Empty is empty" ~: isEmpty ftEmpty ~?= True,
       "Nonempty is not empty"
-        ~: all
-          (isEmpty <$> [ft1, ft2, ft3, ft4, ft5, ft6, ft7, ft8, ft9])
+        ~: all isEmpty [ft1, ft2, ft3, ft4, ft5, ft6, ft7, ft8, ft9]
         ~?= True
     ]
+
+tAppend :: Test
+tAppend =
+  TestList
+    []
 
 tConcat :: Test
 tConcat =
   TestList
-    [ "Concat two empty" ~: undefined,
-      "Concat first empty" ~: undefined,
-      "Concat second empty" ~: undefined,
-      "Concat both simple" ~: undefined,
-      "Concat both complex" ~: undefined
-    ]
+    []
+
+-- "Concat two empty" ~: undefined,
+-- "Concat first empty" ~: undefined,
+-- "Concat second empty" ~: undefined,
+-- "Concat both simple" ~: undefined,
+-- "Concat both complex" ~: undefined
 
 tSplit :: Test
 tSplit =
   TestList
-    [ "Split all left" ~: undefined,
-      "Split all right" ~: undefined,
-      "Split middle" ~: undefined
-    ]
+    []
 
-tMap :: Test
-tMap =
-  TestList
-    [ "Map identity" ~: undefined,
-      "Map to same type" ~: undefined,
-      "Map to diff type" ~: undefined
-    ]
+-- "Split all left" ~: undefined,
+-- "Split all right" ~: undefined,
+-- "Split middle" ~: undefined
 
 tToList :: Test
 tToList =
   TestList
-    [ "toList empty" ~: undefined,
-      "toList simple" ~: undefined,
-      "toList complex" ~: undefined
+    [ "toList empty" ~: toList ftEmpty ~?= [],
+      "toList 1" ~: toList ft1 ~?= [1],
+      "toList 2" ~: toList ft2 ~?= [1, 2],
+      "toList 3" ~: toList ft3 ~?= [1, 2, 3],
+      "toList 4" ~: toList ft4 ~?= [1, 2, 3, 4],
+      "toList 5" ~: toList ft5 ~?= [1, 2, 3, 4, 5],
+      "toList 6" ~: toList ft6 ~?= [1, 2, 3, 4, 5, 6],
+      "toList 7" ~: toList ft7 ~?= [1, 2, 3, 4, 5, 6, 7],
+      "toList 8" ~: toList ft8 ~?= [1, 2, 3, 4, 5, 6, 7, 8],
+      "toList 9" ~: toList ft9 ~?= [1, 2, 3, 4, 5, 6, 7, 8, 9]
     ]
+
+tFromList :: Test
+tFromList =
+  TestList
+    [ "fromList empty" ~: ftEmpty ~?= fromList [],
+      "fromList 1" ~: toList ft1 ~?= toList (fromList [1]),
+      "fromList 2" ~: toList ft2 ~?= toList (fromList [1, 2]),
+      "fromList 3" ~: toList ft3 ~?= toList (fromList [1, 2, 3]),
+      "fromList 4" ~: toList ft4 ~?= toList (fromList [1, 2, 3, 4]),
+      "fromList 5" ~: toList ft5 ~?= toList (fromList [1, 2, 3, 4, 5]),
+      "fromList 6" ~: toList ft6 ~?= toList (fromList [1, 2, 3, 4, 5, 6]),
+      "fromList 7" ~: toList ft7 ~?= toList (fromList [1, 2, 3, 4, 5, 6, 7]),
+      "fromList 8" ~: toList ft8 ~?= toList (fromList [1, 2, 3, 4, 5, 6, 7, 8]),
+      "fromList 9" ~: toList ft9 ~?= toList (fromList [1, 2, 3, 4, 5, 6, 7, 8, 9])
+    ]
+
+tLength :: Test
+tLength =
+  TestList
+    [ "Length empty" ~: length ftEmpty ~?= 0,
+      "Length 1" ~: length ft1 ~?= 1,
+      "Length 2" ~: length ft2 ~?= 2,
+      "Length 3" ~: length ft3 ~?= 3,
+      "Length 4" ~: length ft4 ~?= 4,
+      "Length 5" ~: length ft5 ~?= 5,
+      "Length 6" ~: length ft6 ~?= 6,
+      "Length 7" ~: length ft7 ~?= 7,
+      "Length 8" ~: length ft8 ~?= 8,
+      "Length 9" ~: length ft9 ~?= 9
+    ]
+
+-- tContains :: Test
+-- tContains =
+--   TestList
+--     [ "Contains empty false" ~: contains ftEmpty 0 ~?= False,
+--       "Contains 1 element true" ~: contains ft1 1 ~?= True,
+--       "Contains 1 element false" ~: contains ft1 2 ~?= False,
+--       "Contains many elements (head case)" ~: contains ft9 1 ~?= True,
+--       "Contains many elements (tail case)" ~: contains ft9 9 ~?= True,
+--       "Contains many elements (middle case 1)" ~: contains ft9 4 ~?= True,
+--       "Contains many elements (middle case 1)" ~: contains ft9 5 ~?= True,
+--       "Contains many elements FALSE" ~: contains ft9 5 ~?= False
+--     ]
+
+--------------- QuickCheck Properties ---------------
+
+-- Invariant/Validity Properties? (we don't think there are any as opposed to avl)
+
+-- (1) PostCondition Properties
+
+-- a. insertHead
+prop_insertHeadHead :: Eq a => FingerTree a -> a -> Bool
+prop_insertHeadHead t x =
+  let newTree = insertHead x t
+   in case FingerTree.head newTree of
+        Nothing -> False
+        Just v -> v == x
+
+prop_insertHeadFirst :: Eq a => FingerTree a -> a -> Bool
+prop_insertHeadFirst t x =
+  let newTree = insertHead x t
+   in Prelude.head (toList newTree) == x
+
+-- b. insert tail
+prop_insertTailTail :: Eq a => FingerTree a -> a -> Bool
+prop_insertTailTail t x =
+  let newTree = insertTail x t
+   in case FingerTree.tail newTree of
+        Nothing -> False
+        Just v -> v == x
+
+prop_insertTailLast :: Eq a => FingerTree a -> a -> Bool
+prop_insertTailLast t x =
+  let newTree = insertTail x t
+   in Prelude.last (toList newTree) == x
+
+-- c. head
+-- no postconditions, right?
+
+-- d. tail
+-- no postconditions, right?
+
+-- e. removeTail
+prop_removeTailChanged :: Eq a => FingerTree a -> Bool
+prop_removeTailChanged t =
+  let newTree = removeTail t
+   in case t of
+        Nil -> newTree == t
+        _ -> newTree /= t
+
+-- f. isEmpty
+-- no postconditions, right?
+
+-- g. append
+-- is append just the same as concat?? I dont think we need both
+
+-- h. split
+-- not sure this is the best property?
+prop_split :: Eq a => FingerTree a -> Bool
+prop_split t =
+  let (t1, t2) = split t
+   in FingerTree.head t == FingerTree.head t1
+        && FingerTree.tail t1 == FingerTree.tail t2
+
+-- i. concat
+prop_concat :: Eq a => [FingerTree a] -> Bool
+prop_concat [] = True
+prop_concat l =
+  let t = FingerTree.concat l
+   in (FingerTree.head (Prelude.head l)) == FingerTree.head t
+        && (FingerTree.tail (Prelude.last t)) == FingerTree.tail t
+
+-- j. toList
+-- no post-conditional properties
+
+-- k. fromList
+-- no post-conditions
+
+-- m. length
+-- no post-conditions
+
+-- (2) Metamorphic Properties (Bulk of the testing):
+
+-- (3) Model-Based Poperties (could just use lists for now?)
 
 prop_length :: FingerTree Int -> Bool
 prop_length ft = Maybe.isJust (count ft)
@@ -232,20 +376,20 @@ prop_RightUnit :: (Eq (m b), Monad m) => m b -> Bool
 prop_RightUnit m =
   (m >>= return) == m
 
-prop_Assoc ::
-  (Eq (m c), Monad m) =>
-  m a ->
-  Fun a (m b) ->
-  Fun b (m c) ->
-  Bool
-prop_Assoc m (Fun _ f) (Fun _ g) =
-  ((m >>= f) >>= g) == (m >>= f x >=> g)
+-- prop_Assoc ::
+--   (Eq (m c), Monad m) =>
+--   m a ->
+--   Fun a (m b) ->
+--   Fun b (m c) ->
+--   Bool
+-- prop_Assoc m (Fun _ f) (Fun _ g) =
+--   ((m >>= f) >>= g) == (m >>= f x >=> g)
 
 prop_FunctorMonad :: (Eq (m b), Monad m) => m a -> Fun a b -> Bool
 prop_FunctorMonad x (Fun _ f) = fmap f x == (f <$> x)
 
 qc1 :: IO ()
-qc1 = quickCheck (prop_FMapId :: FingerTree Int -> Bool)
+qc1 = quickCheck (prop_fMapId :: FingerTree Int -> Bool)
 
 qc2 :: IO ()
 qc2 =
@@ -260,10 +404,10 @@ qc4 = quickCheck (prop_RightUnit :: FingerTree Int -> Bool)
 
 -- warning, this one is slower than the rest.
 -- It takes 10-15 seconds on my machine.
-qc5 :: IO ()
-qc5 =
-  quickCheck
-    (prop_Assoc :: FingerTree Int -> Fun Int (FingerTree Int) -> Fun Int (FingerTree Int) -> Bool)
+-- qc5 :: IO ()
+-- qc5 =
+--   quickCheck
+--     (prop_Assoc :: FingerTree Int -> Fun Int (FingerTree Int) -> Fun Int (FingerTree Int) -> Bool)
 
 qc6 :: IO ()
 qc6 = quickCheck (prop_FunctorMonad :: FingerTree Int -> Fun Int (FingerTree Int) -> Bool)
@@ -286,30 +430,33 @@ qc9 = quickCheck (prop_qc9 :: FingerTree Int -> Fun Int (FingerTree Int) -> Bool
 prop_qc9 :: (Eq b) => FingerTree a -> Fun a (FingerTree b) -> Bool
 prop_qc9 m (Fun _ k) = toList (m >>= k) == (toList m >>= (toList . k))
 
-qc10 :: IO ()
-qc10 = quickCheck prop_FingerTree_functor
-  where
-    prop_FingerTree_functor :: Fun Int Int -> FingerTree Int -> Property
-    prop_FingerTree_functor (Fun _ f) x = prop_AVL (fmap f x)
+-- qc10 :: IO ()
+-- qc10 = quickCheck prop_FingerTree_functor
+--   where
+--     prop_FingerTree_functor :: Fun Int Int -> FingerTree Int -> Property
+--     prop_FingerTree_functor (Fun _ f) x = prop_AVL (fmap f x)
 
-qc11 :: IO ()
-qc11 = quickCheck prop_FingerTree_return
-  where
-    prop_FingerTree_return :: Int -> Property
-    prop_FingerTree_return x = prop_AVL (return x)
+-- qc11 :: IO ()
+-- qc11 = quickCheck prop_FingerTree_return
+--   where
+--     prop_FingerTree_return :: Int -> Property
+--     prop_FingerTree_return x = prop_AVL (return x)
 
-qc12 :: IO ()
-qc12 = quickCheck prop_FingerTree_bind
-  where
-    prop_FingerTree_bind :: FingerTree Int -> Fun Int (FingerTree Int) -> Property
-    prop_FingerTree_bind x (Fun _ k) = prop_AVL (x >>= k)
+-- qc12 :: IO ()
+-- qc12 = quickCheck prop_FingerTree_bind
+--   where
+--     prop_FingerTree_bind :: FingerTree Int -> Fun Int (FingerTree Int) -> Property
+--     prop_FingerTree_bind x (Fun _ k) = prop_AVL (x >>= k)
 
 qcFingerTree :: IO ()
 qcFingerTree =
-  qc1 >> qc2 >> qc3 >> qc4 >> qc5 >> qc6
+  qc1 >> qc2 >> qc3 >> qc4
+    -- >> qc5
+    >> qc6
     >> qc7
     >> qc8
     >> qc9
-    >> qc10
-    >> qc11
-    >> qc12
+
+-- >> qc10
+-- >> qc11
+-- >> qc12
