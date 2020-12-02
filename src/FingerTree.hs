@@ -53,14 +53,33 @@ data Tuple a
 
 instance Monad FingerTree where
   return :: a -> FingerTree a
-  return x = undefined
+  return = Unit
 
   (>>=) :: FingerTree a -> (a -> FingerTree b) -> FingerTree b
-  t >>= f = undefined
+  Nil >>= f = Nil
+  (Unit x) >>= f = f x
+  (More l ft r) >>= f = undefined
+  
 
 instance Functor FingerTree where
   fmap :: (a -> b) -> FingerTree a -> FingerTree b
-  fmap f t = undefined
+  fmap f Nil = Nil
+  fmap f (Unit x) = Unit (f x)
+  fmap f (More l ft r) =
+    More (mapSome l f) (fmap (toTupleFunction f) ft) (mapSome r f)
+
+mapSome :: Some a -> (a -> b) -> Some b
+mapSome (One x) f = One (f x)
+mapSome (Two x y) f = Two (f x) (f y)
+mapSome (Three x y z) f = Three (f x) (f y) (f z)
+
+toTupleFunction :: (a -> b) -> (Tuple a -> Tuple b)
+toTupleFunction f = 
+    (\t -> 
+        Pair x y -> Pair (f x) (f y)
+        Triple x y z -> Triple (f x) (f y) (f z)
+    )
+
 
 instance Applicative FingerTree where
   pure :: a -> FingerTree a

@@ -66,4 +66,5 @@ test-suite proj-test
     , HUnit
     , QuickCheck
     , criterion
+    , containers
   default-language: Haskell2010

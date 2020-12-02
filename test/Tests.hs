@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
+import Data.FingerTree as FT
 import Data.Maybe as Maybe
 import FingerTree
   ( FingerTree (..),
@@ -19,7 +20,6 @@ import FingerTree
   )
 import Test.HUnit
 import Test.QuickCheck
-import Data.FingerTree as FT
 
 main :: IO ()
 main = testAll
@@ -315,10 +315,10 @@ prop_insertTailLast t x =
    in Prelude.last (toList newTree) == x
 
 -- c. head
--- no postconditions, right?
+-- no postconditions
 
 -- d. tail
--- no postconditions, right?
+-- no postconditions
 
 -- e. removeTail
 prop_removeTailChanged :: Eq a => FingerTree a -> Bool
@@ -329,19 +329,17 @@ prop_removeTailChanged t =
         _ -> newTree /= t
 
 -- f. isEmpty
--- no postconditions, right?
+-- no postconditions
 
 -- g. append
--- is append just the same as concat?? I dont think we need both
 prop_append :: FingerTree a -> FingerTree a -> Bool
-prop_append t1 t2 = let t = append t1 t2 in
-  FingerTree.head t1 == FingerTreee.head t &&
-  FingerTree.last t2 == FingerTree.last t &&
-  toList t == toList t1 ++ toList t2
-
+prop_append t1 t2 =
+  let t = append t1 t2
+   in FingerTree.head t1 == FingerTreee.head t
+        && FingerTree.last t2 == FingerTree.last t
+        && toList t == toList t1 ++ toList t2
 
 -- h. split
--- not sure this is the best property?
 prop_split :: Eq a => FingerTree a -> Bool
 prop_split t =
   let (t1, t2) = split t
@@ -367,38 +365,86 @@ prop_concat l =
 
 -- (2) Metamorphic Properties (Bulk of the testing):
 
--- insert at head and then remove head, should be previous head
--- insert at tail adn then remove tail, should be previous tail
--- insert twice and then remove to check that they are still there
--- isempty -> insert -> should no longer be empty
--- insert head, insert tail and append trees 
--- append two finger trees, then split them
+-- a.  insert at tail and then remove tail, should be previous tail
+prop_insertRemoveTail :: Eq a => FingerTree a -> a -> Bool
+prop_insertRemoveTail t x =
+  let t' = removeTail (insertTail x t)
+   in FingerTree.last t == FingerTree.last t'
+
+
+-- b. insert at tail twice and then remove tail, tails should be second tail
+prop_insertTwice :: Eq a => FingerTree a -> a -> a -> Bool
+prop_insertTwice t x y =
+  let t' =  removeTail (insertTail y (insertTail x t))
+   in FingerTree.last t' == x
+
+-- c. insert twice and then remove to check that they are still there
+prop_insertRemoveTwice :: Eq a => FingerTree a -> a -> a -> Bool
+prop_insertRemoveTwice t x y =
+  let t' =  removeTail (removeTail (insertTail y (insertTail x t)))
+   in FingerTree.last t' == FingerTree.last t
+
+-- d. isempty -> insert -> should no longer be empty
+prop_isEmptyInsert :: Eq a => FingerTree a -> a -> Bool
+prop_isEmptyInsert t x = not (isEmpty (insertHead x))
+
+-- e. insert head, insert tail and append trees
+prop_insertAppend :: Eq a => FingerTree a -> FingerTree a -> a -> a -> Bool
+prop_insertAppend t1 t2 x1 x2 = 
+  let t1' = insertHead x1 t1 in
+    let t2' = insertTail x2 t2 in
+      let t' = append t1' t2' in
+        FingerTree.head t' == FingerTree.head t1' && 
+        FingerTree.last t' = FingerTree.last t2' &&
+        toList t' == toList t1' ++ toList t2'
+
+-- TODO: Add a metamorphic test (at leat one) for split:
+-- f. append then split (and vice-versa) -- should end up with what you started
+-- g. insert and remove before splitting
+-- h. insert and remove after splitting (and then append?) (like adding element in particular spot)
 
 -- (3) Model-Based Poperties (could just use lists for now?)
 prop_modelInsertHead :: Eq a => [a] -> Bool
-prop_modelInsertHead l = let myTree = foldr insertHead Nil l in 
-                          let modelTree = foldr FT.(<|) FT.empty l in
-                            FT.toList modelTree == FT.toList myTree
+prop_modelInsertHead l =
+  let myTree = foldr insertHead Nil l
+   in let modelTree = foldr FT . (<|) FT.empty l
+       in FT.toList modelTree == FT.toList myTree
 
-prop_modelInsertTail :: Eq a =>[a] -> Bool
-prop_modelInsertTail l = let myTree = foldr insertTail Nil l in 
-                          let modelTree = foldr FT.(|>) FT.empty l in
-                            FT.toList modelTree == FT.toList myTree 
-
-prop_modelFromList :: Eq a => [a] -> Bool
-prop_modelFromListHead l = let myTree = fromList l in
-                         let modelTree = FT.fromList l in
-                          FingerTree.head myTree == FT.head modelTree
+prop_modelInsertTail :: Eq a => [a] -> Bool
+prop_modelInsertTail l =
+  let myTree = foldr insertTail Nil l
+   in let modelTree = foldr FT . (|>) FT.empty l
+       in FT.toList modelTree == FT.toList myTree
 
 prop_modelFromList :: Eq a => [a] -> Bool
-prop_modelFromListTail l = let myTree = fromList l in
-                         let modelTree = FT.fromList l in
-                          FingerTree.last myTree == FT.last modelTree
+
+prop_modelFromListHead l =
+  let myTree = fromList l
+   in let modelTree = FT.fromList l
+       in FingerTree.head myTree == FT.head modelTree
+
+prop_modelFromList :: Eq a => [a] -> Bool
+
+prop_modelFromListTail l =
+  let myTree = fromList l
+   in let modelTree = FT.fromList l
+       in FingerTree.last myTree == FT.last modelTree
 
 prop_modelFromListEveryElement :: Eq a => [a] -> Bool
-prop_modelFromListEveryElement l = let myTree = fromList l in 
-                                    let modelTree = FT.fromList l in
-                                       
+prop_modelFromListEveryElement l =
+  let myTree = fromList l
+   in let modelTree = FT.fromList l
+       in toList myTree == FT.toList modelTree
+
+prop_modelAppend :: Eq a => [a] -> [a] -> Bool
+prop_modelFromListEveryElement l1 l2 =
+  let myTree = append (fromList l1) (fromList l2) in 
+    let modelTree = FT.(><) (FT.fromList l1) (FromList l2) in 
+      toList myTree == FT.toList modelTree
+
+-- TODO: want a model based quick check property for split
+
+-- TODO: add all the unit tests and quickCheck properties for the type class instances of fingerTree
 
 prop_length :: FingerTree Int -> Bool
 prop_length ft = Maybe.isJust (count ft)
