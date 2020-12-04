@@ -75,29 +75,30 @@ ft1 :: FingerTree Int
 ft1 = Unit 1
 
 ft2 :: FingerTree Int
-ft2 = More (One 1) Nil (One 2)
+ft2 = More 2 (One 1) Nil (One 2)
 
 ft3 :: FingerTree Int
-ft3 = More (One 1) Nil (Two 2 3)
+ft3 = More 3 (One 1) Nil (Two 2 3)
 
 ft4 :: FingerTree Int
-ft4 = More (One 1) Nil (Three 2 3 4)
+ft4 = More 4 (One 1) Nil (Three 2 3 4)
 
 ft5 :: FingerTree Int
-ft5 = More (One 1) (Unit (Pair 2 3)) (Two 4 5)
+ft5 = More 5 (One 1) (Unit (Pair 2 3)) (Two 4 5)
 
 ft6 :: FingerTree Int
-ft6 = More (One 1) (Unit (Pair 2 3)) (Three 4 5 6)
+ft6 = More 6 (One 1) (Unit (Pair 2 3)) (Three 4 5 6)
 
 ft7 :: FingerTree Int
-ft7 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Two 6 7)
+ft7 = More 7 (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Two 6 7)
 
 ft8 :: FingerTree Int
-ft8 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
+ft8 = More 8 (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
 
 ft9 :: FingerTree Int
 ft9 =
   More
+    9
     (One 1)
     (More (One (Pair 2 3)) Nil (Two (Pair 4 5) (Pair 6 7)))
     (Two 8 9)
@@ -281,7 +282,6 @@ tLength =
 --       "Contains many elements (middle case 1)" ~: contains ft9 5 ~?= True,
 --       "Contains many elements FALSE" ~: contains ft9 5 ~?= False
 --     ]
-
 --------------- QuickCheck Properties ---------------
 
 -- Invariant/Validity Properties? (we don't think there are any as opposed to avl)
@@ -371,17 +371,16 @@ prop_insertRemoveTail t x =
   let t' = removeTail (insertTail x t)
    in FingerTree.last t == FingerTree.last t'
 
-
 -- b. insert at tail twice and then remove tail, tails should be second tail
 prop_insertTwice :: Eq a => FingerTree a -> a -> a -> Bool
 prop_insertTwice t x y =
-  let t' =  removeTail (insertTail y (insertTail x t))
+  let t' = removeTail (insertTail y (insertTail x t))
    in FingerTree.last t' == x
 
 -- c. insert twice and then remove to check that they are still there
 prop_insertRemoveTwice :: Eq a => FingerTree a -> a -> a -> Bool
 prop_insertRemoveTwice t x y =
-  let t' =  removeTail (removeTail (insertTail y (insertTail x t)))
+  let t' = removeTail (removeTail (insertTail y (insertTail x t)))
    in FingerTree.last t' == FingerTree.last t
 
 -- d. isempty -> insert -> should no longer be empty
@@ -390,13 +389,13 @@ prop_isEmptyInsert t x = not (isEmpty (insertHead x))
 
 -- e. insert head, insert tail and append trees
 prop_insertAppend :: Eq a => FingerTree a -> FingerTree a -> a -> a -> Bool
-prop_insertAppend t1 t2 x1 x2 = 
-  let t1' = insertHead x1 t1 in
-    let t2' = insertTail x2 t2 in
-      let t' = append t1' t2' in
-        FingerTree.head t' == FingerTree.head t1' && 
-        FingerTree.last t' = FingerTree.last t2' &&
-        toList t' == toList t1' ++ toList t2'
+prop_insertAppend t1 t2 x1 x2 =
+  let t1' = insertHead x1 t1
+   in let t2' = insertTail x2 t2
+       in let t' = append t1' t2'
+           in FingerTree.head t' == FingerTree.head t1'
+                && FingerTree.last t' == FingerTree.last t2'
+                && toList t' == toList t1' ++ toList t2'
 
 -- TODO: Add a metamorphic test (at leat one) for split:
 -- f. append then split (and vice-versa) -- should end up with what you started
@@ -437,10 +436,11 @@ prop_modelFromListEveryElement l =
        in toList myTree == FT.toList modelTree
 
 prop_modelAppend :: Eq a => [a] -> [a] -> Bool
+
 prop_modelFromListEveryElement l1 l2 =
-  let myTree = append (fromList l1) (fromList l2) in 
-    let modelTree = FT.(><) (FT.fromList l1) (FromList l2) in 
-      toList myTree == FT.toList modelTree
+  let myTree = append (fromList l1) (fromList l2)
+   in let modelTree = FT . (><) (FT.fromList l1) (FromList l2)
+       in toList myTree == FT.toList modelTree
 
 -- TODO: want a model based quick check property for split
 
