@@ -29,11 +29,39 @@ import Data.Traversable ()
 import Test.HUnit
 import Test.QuickCheck
 
+class Measured a where
+  measure :: a -> Int
+
 data FingerTree a
   = Nil
-  | Unit a
+  | Unit Int a
   | More Int (Some a) (FingerTree (Tuple a)) (Some a)
   deriving (Eq, Show)
+
+data Some a
+  = One Int a
+  | Two Int a a
+  | Three Int a a a
+  deriving (Eq, Show)
+
+data Tuple a
+  = Pair Int a a
+  | Triple Int a a a
+  deriving (Eq, Show)
+
+instance Measured (FingerTree a) where
+  measure Nil = 0
+  measure (Unit l _) = l
+  measure (More l _ _ _) = l
+
+instance Measured (Some a) where
+  measure (One l _) = l
+  measure (Two l _ _) = l
+  measure (Three l _ _ _) = l
+
+instance Measured (Tuple a) where
+  measure (Pair l _ _) = l
+  measure (Triple l _ _ _) = l
 
 data Split f a = Split (f a) a (f a)
   deriving (Eq, Show)
@@ -61,16 +89,31 @@ splitTree tgtI currI (More len l ft r)
   | tgtI < startMiddle =
     let Split sl sx sr = splitSome tgtI currI l
      in Split sl sx (combineTreeLeft sr ft r)
-  | tgtI < startRight =
-    let Split ml ft' mr = splitTree tgtI startMiddle ft
-        Split il ft'' ir = splitSome tgtI (startMiddle + FingerTree.length ml) ft'
-     in Split (combineTreeRight l ml il) ft'' (combineTreeLeft ir mr r)
+  | tgtI < startRight = undefined
+  -- let Split ml ft' mr = splitTree tgtI startMiddle ft
+  --     Split il ft'' ir = splitSome tgtI (startMiddle + FingerTree.length ml) ft'
+  --  in Split (combineTreeRight l ml il) ft'' (combineTreeLeft ir mr r)
   | otherwise =
     let Split sl sx sr = splitSome tgtI startRight r
      in Split (combineTreeRight l ft sl) sx sr
   where
-    startMiddle = currI + lengthSome l
-    startRight = startMiddle + FingerTree.length ft
+    startMiddle = currI + measure l
+    startRight = startMiddle + measure ft
+
+-- splitTuple
+splitTuple :: Int -> Int -> Tuple a -> Split Maybe a
+splitTuple tgtI currI (Pair l x y)
+  | tgtI < startRight = Split Nothing x (Just (One y)) -- Split Nil x ( y)
+  | otherwise = Split (Just (One x)) y Nothing -- Split (Unit x) y Nil
+  where
+    startRight = currI + measure x
+splitTuple tgtI currI (Three l x y z)
+  | tgtI < startMiddle = Split Nothing x (Just (Two y z))
+  | tgtI < startRight = Split (Just (One x)) y (Just (One z)) -- Split (Unit x) y (Unit z)
+  | otherwise = Split (Just (Two x y)) z Nothing
+  where
+    startMiddle = currI + measure x
+    startRight = startMiddle + measure y
 
 combineTreeRight :: Some a -> FingerTree (Tuple a) -> FingerTree a -> FingerTree a
 combineTreeRight s t Nil =
@@ -159,24 +202,13 @@ lengthSome Three {} = 3
 
 split = undefined
 
-data Some a
-  = One a
-  | Two a a
-  | Three a a a
-  deriving (Eq, Show)
-
-data Tuple a
-  = Pair a a
-  | Triple a a a
-  deriving (Eq, Show)
-
 instance Monad FingerTree where
   return :: a -> FingerTree a
   return = Unit
 
   (>>=) :: FingerTree a -> (a -> FingerTree b) -> FingerTree b
   Nil >>= f = Nil
-  (Unit x) >>= f = f x
+  (Unit _ x) >>= f = f x
   (More i l ft r) >>= f = undefined
 
 instance Functor FingerTree where
@@ -190,9 +222,9 @@ instance Functor FingerTree where
 --     More i (mapSome l f) (fmap (toTupleFunction f) ft) (mapSome r f)
 
 mapSome :: Some a -> (a -> b) -> Some b
-mapSome (One x) f = One (f x)
-mapSome (Two x y) f = Two (f x) (f y)
-mapSome (Three x y z) f = Three (f x) (f y) (f z)
+mapSome (One l x) f = One (f x)
+mapSome (Two l x y) f = Two (f x) (f y)
+mapSome (Three l x y z) f = Three (f x) (f y) (f z)
 
 -- toTupleFunction :: (a -> b) -> (Tuple a -> Tuple b)
 -- toTupleFunction f =
@@ -231,33 +263,45 @@ instance Traversable FingerTree where
 -- TODO check i is updated correctly
 insertHead :: a -> FingerTree a -> FingerTree a
 insertHead a Nil = Unit a
-insertHead a (Unit b) = More 2 (One a) Nil (One b)
-insertHead a (More i (One b) ft r) = More (i + 1) (Two a b) ft r
-insertHead a (More i (Two b c) ft r) = More (i + 1) (Three a b c) ft r
-insertHead a (More i (Three b c d) ft r) =
-  More (i + 1) (Two a b) (insertHead (Pair c d) ft) r
+insertHead a (Unit l b) = More (l + measure a) (One a) Nil (One b)
+insertHead a (More l (One il b) ft r) =
+  More (l + measure a) (Two (il + measure a) a b) ft r
+insertHead a (More l (Two il b c) ft r) =
+  More (l + measure a) (Three (il + measure a) a b c) ft r
+insertHead a (More l (Three il b c d) ft r) =
+  More
+    (l + measure a)
+    (Two (measure a + measure b) a b)
+    (insertHead (Pair (measure c + measure d) c d) ft)
+    r
 
 -- TODO check i is updated correctly
 insertTail :: a -> FingerTree a -> FingerTree a
 insertTail z Nil = Unit z
-insertTail z (Unit a) = More 2 (One a) Nil (One z)
-insertTail z (More i l ft (One a)) = More (i + 1) l ft (Two a z)
-insertTail z (More i l ft (Two a b)) = More (i + 1) l ft (Three a b z)
-insertTail z (More i l ft (Three a b c)) =
-  More (i + 1) l (insertTail (Pair a b) ft) (Two c z)
+insertTail z (Unit s a) = More 2 (One a) Nil (One z)
+insertTail z (More s l ft (One is a)) =
+  More (s + measure z) l ft (Two (is + measure z) a z)
+insertTail z (More s l ft (Two is a b)) =
+  More (s + measure z) l ft (Three (is + measure z) a b z)
+insertTail z (More s l ft (Three is a b c)) =
+  More
+    (s + measure z)
+    l
+    (insertTail (Pair (measure a + measure b) a b) ft)
+    (Two (measure c + measure z) c z)
 
 head :: FingerTree a -> Maybe a
 head Nil = Nothing
-head (Unit x) = Just x
-head (More _ (One x) _ _) = Just x
-head (More _ (Two x _) _ _) = Just x
-head (More _ (Three x _ _) _ _) = Just x
+head (Unit _ x) = Just x
+head (More _ (One _ x) _ _) = Just x
+head (More _ (Two _ x _) _ _) = Just x
+head (More _ (Three _ x _ _) _ _) = Just x
 
 -- TODO check i
 tail :: FingerTree a -> Maybe (FingerTree a)
-tail (More i (Three _ x y) ft r) = Just $ More (i - 1) (Two x y) ft r
-tail (More i (Two _ x) ft r) = Just $ More (i - 1) (One x) ft r
-tail (More i (One _) ft r) = case (ft, r) of
+tail (More i (Three _ _ x y) ft r) = Just $ More (i - 1) (Two x y) ft r
+tail (More i (Two _ _ x) ft r) = Just $ More (i - 1) (One x) ft r
+tail (More i (One _ _) ft r) = case (ft, r) of
   (Nil, One x) -> Just $ Unit x
   (Nil, Two x y) -> Just $ More (i - 1) (One x) Nil (One y)
   (Nil, Three x y z) -> Just $ More (i - 1) (One x) Nil (Two y z)
@@ -268,10 +312,10 @@ tail (More i (One _) ft r) = case (ft, r) of
 
 last :: FingerTree a -> Maybe a
 last Nil = Nothing
-last (Unit x) = Just x
-last (More _ _ _ (One x)) = Just x
-last (More _ _ _ (Two _ x)) = Just x
-last (More _ _ _ (Three _ _ x)) = Just x
+last (Unit _ x) = Just x
+last (More _ _ _ (One _ x)) = Just x
+last (More _ _ _ (Two _ _ x)) = Just x
+last (More _ _ _ (Three _ _ _ x)) = Just x
 
 removeTail :: FingerTree a -> FingerTree a
 removeTail = undefined
@@ -285,14 +329,14 @@ append t1 = glue t1 []
 glue :: FingerTree a -> [a] -> FingerTree a -> FingerTree a
 glue Nil l t2 = foldr insertHead t2 l
 glue t1 l Nil = foldl (flip insertTail) t1 l
-glue (Unit x) l t2 = foldr insertHead t2 (x : l)
-glue t1 l (Unit y) = foldl (flip insertTail) t1 (l ++ [y])
+glue (Unit _ x) l t2 = foldr insertHead t2 (x : l)
+glue t1 l (Unit _ y) = foldl (flip insertTail) t1 (l ++ [y])
 glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) =
   More i1 x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
 
 someToList :: Some a -> [a]
-someToList (One x) = [x]
-someToList (Two x y) = [x, y]
+someToList (One _ x) = [x]
+someToList (Two _ x y) = [x, y]
 
 listToTuples :: [a] -> [Tuple a]
 listToTuples [] = []
@@ -309,19 +353,19 @@ concat l = undefined
 -- TODO: Figure out what to do if this contains tuples
 toList :: FingerTree a -> [a]
 toList Nil = []
-toList (Unit x) = undefined
+toList (Unit _ x) = undefined
 toList (More _ l ft r) = undefined
 
 length :: FingerTree a -> Int
 length Nil = 0
-length (Unit _) = 1
+length (Unit l _) = l
 length (More l _ _ _) = l
 
 -- ft8 :: FingerTree Int
 -- ft8 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
 
 fromList :: [a] -> FingerTree a
-fromList = foldr insertTail Nil
+fromList = foldr insertHead Nil
 
 instance (Show a, Arbitrary a) => Arbitrary (FingerTree a) where
   arbitrary = undefined
@@ -388,7 +432,7 @@ tSplitTree =
       "splitTree len 4 at 0"
         ~: splitTree 0 0 ft4 ~?= undefined,
       "splitTree len 4 at 1"
-        ~: splitTree 1 0 ft4 ~?= Split Nil 1 (More 3 (One 2) (Unit 3) (One 4)),
+        ~: splitTree 1 0 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
       "splitTree len 4 at 2"
         ~: splitTree 2 0 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
       "splitTree len 4 at 3"
