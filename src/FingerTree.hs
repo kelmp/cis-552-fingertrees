@@ -1,573 +1,713 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 
 module FingerTree where
 
--- #if MIN_VERSION_base(4,6,0)
--- import GHC.Generics
--- #endif
--- #if MIN_VERSION_base(4,8,0)
--- import qualified Prelude (null)
--- #else
-import Control.Applicative (Applicative (pure, (<*>)), (<$>))
--- #endif
--- #if (MIN_VERSION_base(4,9,0)) && !(MIN_VERSION_base(4,11,0))
+--   ( FingerTree (..),
+--     insertHead,
+--     insertTail,
+--     FingerTree.head,
+--     FingerTree.tail,
+--     isEmpty,
+--     append,
+--     split,
+--     toList,
+--     fromList,
+--     removeTail,
+--     FingerTree.concat,
+--     FingerTree.length,
+--     FingerTree.last,
+--   )
 
--- #endif
-import Data.Foldable (Foldable (foldMap), toList)
-import Data.Monoid
-import Data.Semigroup
-import Prelude hiding (null, reverse)
-import GHC.Generics
-infixr 5 ><
+import Control.Applicative ()
+import Control.Monad ()
+import Data.Foldable ()
+import Data.Functor ()
+import Data.Monoid ()
+import Data.Semigroup ()
+import Data.Traversable ()
+import Test.HUnit
+import Test.QuickCheck
 
-infixr 5 <|, :<
+-- import Data.Traversable ()
+-- import Test.HUnit
+-- import Test.QuickCheck
 
-infixl 5 |>, :>
+data FingerTree a
+  = Nil
+  | Unit a
+  | More Int (Some a) (FingerTree (Tuple a)) (Some a)
+  deriving (Eq, Show)
 
-data FingerTree v a
-  = Empty
-  | Single a
-  | Deep !v !(Digit a) (FingerTree v (Node v a)) !(Digit a)
-
-data Node v a = Node2 !v a a | Node3 !v a a a
-  deriving (Show, Eq)
-
-data Digit a
+data Some a
   = One a
   | Two a a
   | Three a a a
-  | Four a a a a
-  deriving (Show, Eq)
+  deriving (Eq, Show)
 
-data ViewR s a
-    = EmptyR        -- ^ empty sequence
-    | s a :> a      -- ^ the sequence minus the rightmost element,
-                    -- and the rightmost element
-    deriving (Eq, Ord, Show, Read)
+data Tuple a
+  = Pair Int a a
+  | Triple Int a a a
+  deriving (Eq, Show)
 
--- | View of the left end of a sequence.
-data ViewL s a
-    = EmptyL        -- ^ empty sequence
-    | a :< s a      -- ^ leftmost element and the rest of the sequence
-    deriving (Eq, Ord, Show, Read)
+class Measured a where
+  measure :: a -> Int
 
-deep ::
-  (Measured v a) =>
-  Digit a ->
-  FingerTree v (Node v a) ->
-  Digit a ->
-  FingerTree v a
-deep pr m sf =
-  Deep ((measure pr `mappend` measure m) `mappend` measure sf) pr m sf
- 
--- | Elements from left to right.
-instance Foldable (FingerTree v) where
-  foldMap _ Empty = mempty
-  foldMap f (Single x) = f x
-  foldMap f (Deep _ pr m sf) =
-    foldMap f pr `mappend` foldMap (foldMap f) m `mappend` foldMap f sf
+-- data FingerTree a
+--   = Nil
+--   | Unit Int a
+--   | More Int (Some a) (FingerTree (Tuple a)) (Some a)
+--   deriving (Eq, Show)
 
-instance (Eq a) => Eq (FingerTree v a) where
-  xs == ys = toList xs == toList ys
+-- data Some a
+--   = One Int a
+--   | Two Int a a
+--   | Three Int a a a
+--   deriving (Eq, Show)
 
--- | Lexicographical order from left to right.
-instance (Ord a) => Ord (FingerTree v a) where
-  compare xs ys = compare (toList xs) (toList ys)
+-- data Tuple a
+--   = Pair Int a a
+--   | Triple Int a a a
+--   deriving (Eq, Show)
 
-instance (Show a) => Show (FingerTree v a) where
-    showsPrec p xs = showParen (p > 10) $
-        showString "fromList " . shows (toList xs)
+instance Measured (FingerTree a) where
+  measure Nil = 0
+  measure (Unit x) = measure x
+  measure (More l _ _ _) = l
 
-instance Foldable Digit where
-  foldMap f (One a) = f a
-  foldMap f (Two a b) = f a `mappend` f b
-  foldMap f (Three a b c) = f a `mappend` f b `mappend` f c
-  foldMap f (Four a b c d) = f a `mappend` f b `mappend` f c `mappend` f d
+instance Measured (Some a) where
+  measure One {} = 1
+  measure Two {} = 2
+  measure Three {} = 3
 
-class (Monoid v) => Measured v a | a -> v where
-  measure :: a -> v
+instance Measured (Tuple a) where
+  measure (Pair l _ _) = l
+  measure (Triple l _ _ _) = l
 
-instance (Measured v a) => Measured v (Digit a) where
-  measure = foldMap measure
+data Split o a = Split o a o
+  deriving (Eq, Show)
 
--- | /O(1)/. The cached measure of a tree.
-instance (Measured v a) => Measured v (FingerTree v a) where
-  measure Empty = mempty
-  measure (Single x) = measure x
-  measure (Deep v _ _ _) = v
+-- splitSome :: Int -> Int -> Some a -> Split FingerTree a
+-- splitSome _ _ (One x) = Split Nil x Nil
+-- splitSome tgtI currI (Two x y)
+--   | tgtI == currI + 1 = Split Nil x (Unit y)
+--   | otherwise = Split (Unit x) y Nil
+-- splitSome tgtI currI (Three x y z)
+--   | tgtI == currI + 1 = Split Nil x (insertHead y (Unit z))
+--   | tgtI == currI + 2 = Split (Unit x) y (Unit z)
+--   | otherwise = Split (insertHead x (Unit y)) z Nil
 
-instance Foldable (Node v) where
-    foldMap f (Node2 _ a b) = f a `mappend` f b
-    foldMap f (Node3 _ a b c) = f a `mappend` f b `mappend` f c
+-- ask whether there's a way to get nested types
+-- splitSome :: Int -> Int -> Some a -> Split (Maybe (Digit a)) a
+splitSome :: Int -> Some a -> Split (Maybe (Some a)) a
+splitSome _ (One x) = Split Nothing x Nothing
+splitSome tgtI (Two x y)
+  | tgtI == 1 = Split Nothing x (Just (One y))
+  | otherwise = Split (Just (One x)) y Nothing
+splitSome tgtI (Three x y z)
+  | tgtI == 1 = Split Nothing x (Just (Two y z))
+  | tgtI == 2 = Split (Just (One x)) y (Just (One z))
+  | otherwise = Split (Just (Two x y)) z Nothing
 
-node2        ::  (Measured v a) => a -> a -> Node v a
-node2 a b    =   Node2 (measure a `mappend` measure b) a b
+splitTuple :: Int -> Tuple a -> Split (Maybe (Some a)) a
+splitTuple tgtI (Pair _ x y)
+  | tgtI == 1 = Split Nothing x (Just (One y))
+  | otherwise = Split (Just (One x)) y Nothing
+splitTuple tgtI (Triple _ x y z)
+  | tgtI == 1 = Split Nothing x (Just (Two y z))
+  | tgtI == 2 = Split (Just (One x)) y (Just (One z))
+  | otherwise = Split (Just (Two x y)) z Nothing
 
-node3        ::  (Measured v a) => a -> a -> a -> Node v a
-node3 a b c  =   Node3 (measure a `mappend` measure b `mappend` measure c) a b c
-
-instance (Monoid v) => Measured v (Node v a) where
-    measure (Node2 v _ _)    =  v
-    measure (Node3 v _ _ _)  =  v
-
-nodeToDigit :: Node v a -> Digit a
-nodeToDigit (Node2 _ a b) = Two a b
-nodeToDigit (Node3 _ a b c) = Three a b c
-
--- | /O(log(min(i,n-i)))/. Split a sequence at a point where the predicate
--- on the accumulated measure of the prefix changes from 'False' to 'True'.
---
--- For predictable results, one should ensure that there is only one such
--- point, i.e. that the predicate is /monotonic/.
-split ::
-  (Measured v a) =>
-  (v -> Bool) ->
-  FingerTree v a ->
-  (FingerTree v a, FingerTree v a)
-split _ Empty = (Empty, Empty)
-split p xs
-  | p (measure xs) = (l, x <| r)
-  | otherwise = (xs, Empty)
-  where
-    Split l x r = splitTree p mempty xs
-
--- | /O(log(min(i,n-i)))/.
--- Given a monotonic predicate @p@, @'takeUntil' p t@ is the largest
--- prefix of @t@ whose measure does not satisfy @p@.
---
--- *  @'takeUntil' p t = 'fst' ('split' p t)@
-takeUntil :: (Measured v a) => (v -> Bool) -> FingerTree v a -> FingerTree v a
-takeUntil p = fst . split p
-
--- | /O(log(min(i,n-i)))/.
--- Given a monotonic predicate @p@, @'dropUntil' p t@ is the rest of @t@
--- after removing the largest prefix whose measure does not satisfy @p@.
---
--- * @'dropUntil' p t = 'snd' ('split' p t)@
-dropUntil :: (Measured v a) => (v -> Bool) -> FingerTree v a -> FingerTree v a
-dropUntil p = snd . split p
-
-data Split t a = Split t a t
-
-splitTree ::
-  (Measured v a) =>
-  (v -> Bool) ->
-  v ->
-  FingerTree v a ->
-  Split (FingerTree v a) a
-splitTree _ _ Empty = undefined -- NOT POSSIBLE
-splitTree _ _ (Single x) = Split Empty x Empty
-splitTree p i (Deep _ pr m sf)
-  | p vpr =
-    let Split l x r = splitDigit p i pr
-     in Split (maybe Empty digitToTree l) x (deepL r m sf)
-  | p vm =
-    let Split ml xs mr = splitTree p vpr m
-        Split l x r = splitNode p (vpr `mappend` measure ml) xs
-     in Split (deepR pr ml l) x (deepL r mr sf)
+splitTree :: Int -> FingerTree a -> Split (FingerTree a) a
+splitTree _ Nil = error "Cannot split empty FingerTree"
+splitTree _ (Unit x) = Split Nil x Nil
+splitTree tgtI (More len l ft r)
+  | tgtI <= startMiddle =
+    let Split sl sx sr = splitSome tgtI l
+     in Split sl sx (deepL sr ft r)
+  | tgtI <= startRight =
+    let Split ml x' mr = splitTree (tgtI - measure l) ft
+        Split il x'' ir = splitTuple (tgtI - measure l - measure ml) x'
+     in Split (deepR l ml il) x'' (deepL ir mr r)
   | otherwise =
-    let Split l x r = splitDigit p vm sf
-     in Split (deepR pr m l) x (maybe Empty digitToTree r)
+    let Split sl sx sr = splitSome (tgtI - measure l - measure ft) r
+     in Split (deepR l ft sl) sx (someToTree sr)
+
+split :: Int -> FingerTree a -> (FingerTree a, FingerTree a)
+split _ Nil = (Nil, Nil)
+split i ft =
+  if i >= 0 && i < measure ft
+    then
+      let Split l x r = splitTree i ft
+       in (l, insertHead x r)
+    else (ft, Nil)
+
+-- split helpers
+-- splitTree needs deepL, deepR, and someToTree
+deepL :: Maybe (Some a) -> FingerTree (Tuple a) -> Some a -> FingerTree a
+deepL Nothing ft r = rotL ft r
+deepL (Just l) ft r = more l ft r
+
+deepR :: Some a -> FingerTree (Tuple a) -> Maybe (Some a) -> FingerTree a
+deepR l ft Nothing = rotR l ft
+deepR l ft (Just r) = more l ft r
+
+someToTree :: Some a -> FingerTree a
+someToTree (One a) = Unit a
+someToTree (Two a b) = More (One a) Nil (One b)
+someToTree (Three a b c) = More (One a) Nil (Two b c)
+
+-- deepL and deepR need rotL/rotR helpers, and a smart constructor for More
+
+-- Inputs represent a FingerTree with missing left branch; shift middle to
+-- left by 1 (if possible) to construct valid FingerTree
+rotL :: FingerTree (Tuple a) -> Some a -> FingerTree a
+rotL ft r = case ft of
+  Nil -> someToTree r
+  Unit x -> more (tupleToSome x) Nil r
+  -- More case needs to lift left el of left branch of inner FT out of its tuple
+  More _ il ft' ir -> case someSeparateHead il of
+    (h, Nothing) -> more (tupleToSome h) (rotL ft' ir) r
+    (h, Just t) -> more (tupleToSome h) (more t ft' ir) r
+
+-- Similar to rotL, but there's no right branch (so rotate to right by 1)
+rotR :: Some a -> FingerTree (Tuple a) -> FingerTree a
+rotR l ft = case ft of
+  Nil -> someToTree l
+  Unit x -> more l Nil (tupleToSome x)
+  -- lifting right branch of inner FT out of tuple
+  More _ il ft' ir -> case someSeparateLast ir of
+    (Nothing, last) -> more l (rotR il ft') (tupleToSome last)
+    (Just first, last) -> more l (more il ft' first) (tupleToSome last)
+
+-- helper for rotL. The head becomes the missing left branch of the overall FT,
+-- and the remainder becomes the left branch of the inner FT
+someSeparateHead :: Some a -> (a, Maybe (Some a))
+someSeparateHead (One x) = (x, Nothing)
+someSeparateHead (Two x y) = (x, Just (One y))
+someSeparateHead (Three x y z) = (x, Just (Two y z))
+
+-- helper for rotL; the first (len-1) elements become the right branch of the
+-- inner FT, and the last el becomes the missing right branch of the overall FT
+someSeparateLast :: Some a -> (Maybe (Some a), a)
+someSeparateLast (One x) = (Nothing, x)
+someSeparateLast (Two x y) = (Just (One x), y)
+someSeparateLast (Three x y z) = (Just (Two x y), z)
+
+tupleToSome :: Tuple a -> Some a
+tupleToSome (Pair _ a b) = Two a b
+tupleToSome (Triple _ a b c) = Three a b c
+
+more :: Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
+more l ft r = More (measure l + measure ft + measure r) l ft r
+
+-- splitTree 0 0 More 4 (One 1) Nil (Three 2 3 4)
+-- tgtI < 0 + 1, enter first More case
+-- splitSome 0 0 l = splitSome 0 0 (One 1) = Split Nil 1 Nil
+-- splitTree result = Split Nil 1 (toTree (2 3 4))
+--   = Split Nil 1 (More 3 (One 2) Nil (Two 3 4)) ???
+
+-- splitTree :: Int -> Int -> FingerTree a -> Split FingerTree a
+-- splitTree _ _ Nil = undefined
+-- splitTree _ _ (Unit x) = Split Nil x Nil
+-- splitTree tgtI currI (More len l ft r)
+--   | tgtI < startMiddle =
+--     let Split sl sx sr = splitSome tgtI currI l
+--      in Split sl sx (combineTreeLeft sr ft r)
+--   | tgtI < startRight = undefined
+--   -- let Split ml ft' mr = splitTree tgtI startMiddle ft
+--   --     Split il ft'' ir = splitSome tgtI (startMiddle + FingerTree.length ml) ft'
+--   --  in Split (combineTreeRight l ml il) ft'' (combineTreeLeft ir mr r)
+--   | otherwise =
+--     let Split sl sx sr = splitSome tgtI startRight r
+--      in Split (combineTreeRight l ft sl) sx sr
+--   where
+--     startMiddle = currI + measure l
+--     startRight = startMiddle + measure ft
+
+-- splitTuple
+-- splitTuple :: Int -> Int -> Tuple a -> Split Maybe a
+-- splitTuple tgtI currI (Pair l x y)
+--   | tgtI < startRight = Split Nothing x (Just (One y)) -- Split Nil x ( y)
+--   | otherwise = Split (Just (One x)) y Nothing -- Split (Unit x) y Nil
+--   where
+--     startRight = currI + measure x
+-- splitTuple tgtI currI (Three l x y z)
+--   | tgtI < startMiddle = Split Nothing x (Just (Two y z))
+--   | tgtI < startRight = Split (Just (One x)) y (Just (One z)) -- Split (Unit x) y (Unit z)
+--   | otherwise = Split (Just (Two x y)) z Nothing
+--   where
+--     startMiddle = currI + measure x
+--     startRight = startMiddle + measure y
+
+combineTreeRight :: Some a -> FingerTree (Tuple a) -> FingerTree a -> FingerTree a
+combineTreeRight s t Nil =
+  let newLen = (1 + measure t + lengthSome s)
+   in case (OldFingerTree.last t, removeTail t) of
+        (_, Nil) -> someToTree s
+        (Just (Pair x y), t') -> More newLen s t' (Two x y)
+        (Just (Triple x y z), t') -> More newLen s t' (Three x y z)
+        _ -> someToTree s
+combineTreeRight s t (Unit x) = More (1 + measure t + lengthSome s) s t (One x)
+combineTreeRight s t' (More len l t r) = More newLen s t'' r
   where
-    vpr = i `mappend` measure pr
-    vm = vpr `mappend` measure m
+    newLen = len + lengthSome s + measure t'
+    t'' = insertSome t' l t
 
-deepL ::
-  (Measured v a) =>
-  Maybe (Digit a) ->
-  FingerTree v (Node v a) ->
-  Digit a ->
-  FingerTree v a
-deepL Nothing m sf = rotL m sf
-deepL (Just pr) m sf = deep pr m sf
-
-deepR ::
-  (Measured v a) =>
-  Digit a ->
-  FingerTree v (Node v a) ->
-  Maybe (Digit a) ->
-  FingerTree v a
-deepR pr m Nothing = rotR pr m
-deepR pr m (Just sf) = deep pr m sf
-
-splitNode ::
-  (Measured v a) =>
-  (v -> Bool) ->
-  v ->
-  Node v a ->
-  Split (Maybe (Digit a)) a
-splitNode p i (Node2 _ a b)
-  | p va = Split Nothing a (Just (One b))
-  | otherwise = Split (Just (One a)) b Nothing
+combineTreeLeft :: FingerTree a -> FingerTree (Tuple a) -> Some a -> FingerTree a
+combineTreeLeft Nil t s =
+  let newLen = (1 + measure t + lengthSome s)
+   in case (OldFingerTree.head t, OldFingerTree.tail t) of
+        (Just (Pair x y), Just v) -> More newLen (Two x y) v s
+        (Just (Triple x y z), Just v) -> More newLen (Three x y z) v s
+        _ -> someToTree s
+combineTreeLeft (Unit x) t' s = More (1 + measure t' + lengthSome s) (One x) t' s
+combineTreeLeft (More len l t r) t' s = More newLen l t'' s
   where
-    va = i `mappend` measure a
-splitNode p i (Node3 _ a b c)
-  | p va = Split Nothing a (Just (Two b c))
-  | p vab = Split (Just (One a)) b (Just (One c))
-  | otherwise = Split (Just (Two a b)) c Nothing
-  where
-    va = i `mappend` measure a
-    vab = va `mappend` measure b
+    newLen = len + lengthSome s + measure t'
+    t'' = insertSome t r t'
 
-splitDigit ::
-  (Measured v a) =>
-  (v -> Bool) ->
-  v ->
-  Digit a ->
-  Split (Maybe (Digit a)) a
-splitDigit _ i (One a) = i `seq` Split Nothing a Nothing
-splitDigit p i (Two a b)
-  | p va = Split Nothing a (Just (One b))
-  | otherwise = Split (Just (One a)) b Nothing
-  where
-    va = i `mappend` measure a
-splitDigit p i (Three a b c)
-  | p va = Split Nothing a (Just (Two b c))
-  | p vab = Split (Just (One a)) b (Just (One c))
-  | otherwise = Split (Just (Two a b)) c Nothing
-  where
-    va = i `mappend` measure a
-    vab = va `mappend` measure b
-splitDigit p i (Four a b c d)
-  | p va = Split Nothing a (Just (Three b c d))
-  | p vab = Split (Just (One a)) b (Just (Two c d))
-  | p vabc = Split (Just (Two a b)) c (Just (One d))
-  | otherwise = Split (Just (Three a b c)) d Nothing
-  where
-    va = i `mappend` measure a
-    vab = va `mappend` measure b
-    vabc = vab `mappend` measure c
+someToTree :: Some a -> FingerTree a
+someToTree (One x) = Unit x
+someToTree (Two x y) = More 2 (One x) Nil (One y)
+someToTree (Three x y z) = More 3 (Two x y) Nil (One z)
 
+insertSome :: FingerTree (Tuple a) -> Some a -> FingerTree (Tuple a) -> FingerTree (Tuple a)
+insertSome t1 (Two x y) t2 = append (insertTail (Pair x y) t1) t2
+insertSome t1 (Three x y z) t2 = append (insertTail (Triple x y z) t1) t2
+insertSome t1 (One x) t2 = undefined
 
- -- functions:
- -- | /O(1)/. Add an element to the left end of a sequence.
--- Mnemonic: a triangle with the single element at the pointy end.
-(<|) :: (Measured v a) => a -> FingerTree v a -> FingerTree v a
-a <| Empty              =  Single a
-a <| Single b           =  deep (One a) Empty (One b)
-a <| Deep v (Four b c d e) m sf = m `seq`
-    Deep (measure a `mappend` v) (Two a b) (node3 c d e <| m) sf
-a <| Deep v pr m sf     =
-    Deep (measure a `mappend` v) (consDigit a pr) m sf
+lengthSome :: Some a -> Int
+lengthSome One {} = 1
+lengthSome Two {} = 2
+lengthSome Three {} = 3
 
-consDigit :: a -> Digit a -> Digit a
-consDigit a (One b) = Two a b
-consDigit a (Two b c) = Three a b c
-consDigit a (Three b c d) = Four a b c d
-consDigit _ (Four _ _ _ _) = undefined -- TODO
+-- splitTree :: (Measured a v) => (v -> Bool) -> v -> FingerTree v a -> Split (FingerTree v) a
+-- -- no way to split a Unit
+-- splitTree pred i (Single x) = Split Empty x Empty
 
--- | /O(1)/. Add an element to the right end of a sequence.
--- Mnemonic: a triangle with the single element at the pointy end.
-(|>) :: (Measured v a) => FingerTree v a -> a -> FingerTree v a
-Empty |> a              =  Single a
-Single a |> b           =  deep (One a) Empty (One b)
-Deep v pr m (Four a b c d) |> e = m `seq`
-    Deep (v `mappend` measure e) pr (m |> node3 a b c) (Two d e)
-Deep v pr m sf |> x     =
-    Deep (v `mappend` measure x) pr m (snocDigit sf x)
+-- -- attempt to split a More
+-- splitTree pred i (Deep l ft r )
+--   | pred startMiddle =
+--     let Split sl sx sr = splitSome pred i l in
+--       Split (toTree sl) sx (deepL sr ft r )
+--   | pred startRight =
+--     let Split ml xs mr = splitTree pred startMiddle ft
+--         Split sl sx sr = splitSome pred (startMiddle ⊕ kmlk) (toList xs) in
+--           Split (deepR l ml sl) sx (deepL sr mr r )
+--   | otherwise =
+--     let Split sl sx sr = splitSome pred startRight r in
+--       Split (deepR l ft sl) sx (toTree sr)
+--   where startMiddle = i + (FingerTree.length l)
+--         startRight = startMiddle + (FingerTree.length ft)
 
-snocDigit :: Digit a -> a -> Digit a
-snocDigit (One a) b = Two a b
-snocDigit (Two a b) c = Three a b c
-snocDigit (Three a b c) d = Four a b c d
-snocDigit (Four _ _ _ _) _ = undefined -- TODO
+-- splitSome :: (v -> Bool) -> v -> Some a -> Split FingerTree a
+-- splitSome p i (One x) = Split Nil x Nil
+-- splitSome p i (Two x y)
+--   | p startY = Split Nil x (Unit y)
+--   | otherwise = Split (Unit x) y Nil
+--   where startY = i + (FingerTree.length x)
+-- -- | otherwise = let Split l ft r = splitSome p i' (One y) in
+-- --     Split (insertHead x l) ft r
+-- splitSome p i (Three x y z)
+--   | p i' = Split Nil x (More (FingerTree.length y + FingerTree.length z) (One y) Nil (One z))
+--   | otherwise = let Split l ft r = splitSome p i' (Two y z) in
+--       Split (insertHead x l) ft r
+--   where i' = i + (FingerTree.length x)
+-- -- splitSome p i (a : as)
+-- --   | p i′ = Split [ ] a as
+-- --   | otherwise = let Split l x r = splitSome p i′ as in Split (a : l) x r
+-- --   where i′ = i + (length a)
 
--- | /O(1)/. Is this the empty sequence?
-null :: FingerTree v a -> Bool
-null Empty = True
-null _ = False
+-- split :: Int -> FingerTree a -> (FingerTree a, FingerTree a)
+-- split i Nil = (Nil, Nil)
+-- split i t = if FingerTree.length t > i then (t, Empty) else (insertTail x l, r)
+--   where
+--     Split l x r = splitTree i 0 t
 
--- | /O(log(min(n1,n2)))/. Concatenate two sequences.
-(><) :: (Measured v a) => FingerTree v a -> FingerTree v a -> FingerTree v a
-(><) =  appendTree0
+instance Monad FingerTree where
+  return :: a -> FingerTree a
+  return = Unit
 
-appendTree0 :: (Measured v a) => FingerTree v a -> FingerTree v a -> FingerTree v a
-appendTree0 Empty xs =
-    xs
-appendTree0 xs Empty =
-    xs
-appendTree0 (Single x) xs =
-    x <| xs
-appendTree0 xs (Single x) =
-    xs |> x
-appendTree0 (Deep _ pr1 m1 sf1) (Deep _ pr2 m2 sf2) =
-    deep pr1 (addDigits0 m1 sf1 pr2 m2) sf2
+  (>>=) :: FingerTree a -> (a -> FingerTree b) -> FingerTree b
+  Nil >>= f = Nil
+  (Unit _ x) >>= f = f x
+  (More n l t r) >>= f = undefined
 
-addDigits0 :: (Measured v a) => FingerTree v (Node v a) -> Digit a -> Digit a -> FingerTree v (Node v a) -> FingerTree v (Node v a)
-addDigits0 m1 (One a) (One b) m2 =
-    appendTree1 m1 (node2 a b) m2
-addDigits0 m1 (One a) (Two b c) m2 =
-    appendTree1 m1 (node3 a b c) m2
-addDigits0 m1 (One a) (Three b c d) m2 =
-    appendTree2 m1 (node2 a b) (node2 c d) m2
-addDigits0 m1 (One a) (Four b c d e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits0 m1 (Two a b) (One c) m2 =
-    appendTree1 m1 (node3 a b c) m2
-addDigits0 m1 (Two a b) (Two c d) m2 =
-    appendTree2 m1 (node2 a b) (node2 c d) m2
-addDigits0 m1 (Two a b) (Three c d e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits0 m1 (Two a b) (Four c d e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits0 m1 (Three a b c) (One d) m2 =
-    appendTree2 m1 (node2 a b) (node2 c d) m2
-addDigits0 m1 (Three a b c) (Two d e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits0 m1 (Three a b c) (Three d e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits0 m1 (Three a b c) (Four d e f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits0 m1 (Four a b c d) (One e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits0 m1 (Four a b c d) (Two e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits0 m1 (Four a b c d) (Three e f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits0 m1 (Four a b c d) (Four e f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
+instance Functor FingerTree where
+  fmap :: (a -> b) -> FingerTree a -> FingerTree b
+  fmap _ Nil = Nil
+  fmap f (Unit x) = Unit (f x)
+  fmap f (More n l t r) = More n (fmap l) (fmap (fmap f) t) (fmap r)
 
-appendTree1 :: (Measured v a) => FingerTree v a -> a -> FingerTree v a -> FingerTree v a
-appendTree1 Empty a xs =
-    a <| xs
-appendTree1 xs a Empty =
-    xs |> a
-appendTree1 (Single x) a xs =
-    x <| a <| xs
-appendTree1 xs a (Single x) =
-    xs |> a |> x
-appendTree1 (Deep _ pr1 m1 sf1) a (Deep _ pr2 m2 sf2) =
-    deep pr1 (addDigits1 m1 sf1 a pr2 m2) sf2
+instance Functor Some where
+  fmap :: (a -> b) -> Some a -> Some b
+  fmap f (One x) = One (f x)
+  fmap f (Two x y) = Two (f x) (f y)
+  fmap f (Three x y z) = Three (f x) (f y) (f z)
 
-addDigits1 :: (Measured v a) => FingerTree v (Node v a) -> Digit a -> a -> Digit a -> FingerTree v (Node v a) -> FingerTree v (Node v a)
-addDigits1 m1 (One a) b (One c) m2 =
-    appendTree1 m1 (node3 a b c) m2
-addDigits1 m1 (One a) b (Two c d) m2 =
-    appendTree2 m1 (node2 a b) (node2 c d) m2
-addDigits1 m1 (One a) b (Three c d e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits1 m1 (One a) b (Four c d e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits1 m1 (Two a b) c (One d) m2 =
-    appendTree2 m1 (node2 a b) (node2 c d) m2
-addDigits1 m1 (Two a b) c (Two d e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits1 m1 (Two a b) c (Three d e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits1 m1 (Two a b) c (Four d e f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits1 m1 (Three a b c) d (One e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits1 m1 (Three a b c) d (Two e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits1 m1 (Three a b c) d (Three e f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits1 m1 (Three a b c) d (Four e f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits1 m1 (Four a b c d) e (One f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits1 m1 (Four a b c d) e (Two f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits1 m1 (Four a b c d) e (Three f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits1 m1 (Four a b c d) e (Four f g h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
+instance Functor Tuple where
+  fmap :: (a -> b) -> Tuple a -> Tuple b
+  fmap f (Pair x y) = Pair (f x) (f y)
+  fmap f (Triple x y z) = Triple (f x) (f y) (f z)
 
-appendTree2 :: (Measured v a) => FingerTree v a -> a -> a -> FingerTree v a -> FingerTree v a
-appendTree2 Empty a b xs =
-    a <| b <| xs
-appendTree2 xs a b Empty =
-    xs |> a |> b
-appendTree2 (Single x) a b xs =
-    x <| a <| b <| xs
-appendTree2 xs a b (Single x) =
-    xs |> a |> b |> x
-appendTree2 (Deep _ pr1 m1 sf1) a b (Deep _ pr2 m2 sf2) =
-    deep pr1 (addDigits2 m1 sf1 a b pr2 m2) sf2
+--   foldMap _ Empty = mempty
+-- foldMap f (Single x) = f x
+-- foldMap f (Deep _ pr m sf) =
+--   foldMap f pr `mappend` foldMap (foldMap f) m `mappend` foldMap f sf
+-- Deep !v !(Digit a) (FingerTree v (Node v a)) !(Digit a)
+--   fmap :: (a -> b) -> FingerTree a -> FingerTree b
+--   fmap f Nil = Nil
+--   fmap f (Unit x) = Unit (f x)
+--   fmap f (More i l ft r) =
+--     -- TODO FIX
+--     More i (mapSome l f) (fmap (toTupleFunction f) ft) (mapSome r f)
 
-addDigits2 :: (Measured v a) => FingerTree v (Node v a) -> Digit a -> a -> a -> Digit a -> FingerTree v (Node v a) -> FingerTree v (Node v a)
-addDigits2 m1 (One a) b c (One d) m2 =
-    appendTree2 m1 (node2 a b) (node2 c d) m2
-addDigits2 m1 (One a) b c (Two d e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits2 m1 (One a) b c (Three d e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits2 m1 (One a) b c (Four d e f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits2 m1 (Two a b) c d (One e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits2 m1 (Two a b) c d (Two e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits2 m1 (Two a b) c d (Three e f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits2 m1 (Two a b) c d (Four e f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits2 m1 (Three a b c) d e (One f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits2 m1 (Three a b c) d e (Two f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits2 m1 (Three a b c) d e (Three f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits2 m1 (Three a b c) d e (Four f g h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits2 m1 (Four a b c d) e f (One g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits2 m1 (Four a b c d) e f (Two g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits2 m1 (Four a b c d) e f (Three g h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits2 m1 (Four a b c d) e f (Four g h i j) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node2 g h) (node2 i j) m2
+mapSome :: Some a -> (a -> b) -> Some b
+mapSome (One l x) f = One (f x)
+mapSome (Two l x y) f = Two (f x) (f y)
+mapSome (Three l x y z) f = Three (f x) (f y) (f z)
 
-appendTree3 :: (Measured v a) => FingerTree v a -> a -> a -> a -> FingerTree v a -> FingerTree v a
-appendTree3 Empty a b c xs =
-    a <| b <| c <| xs
-appendTree3 xs a b c Empty =
-    xs |> a |> b |> c
-appendTree3 (Single x) a b c xs =
-    x <| a <| b <| c <| xs
-appendTree3 xs a b c (Single x) =
-    xs |> a |> b |> c |> x
-appendTree3 (Deep _ pr1 m1 sf1) a b c (Deep _ pr2 m2 sf2) =
-    deep pr1 (addDigits3 m1 sf1 a b c pr2 m2) sf2
+-- toTupleFunction :: (a -> b) -> (Tuple a -> Tuple b)
+-- toTupleFunction f =
+--     (\t ->
+--         Pair x y -> Pair (f x) (f y)
+--         Triple x y z -> Triple (f x) (f y) (f z)
+--     )
 
-addDigits3 :: (Measured v a) => FingerTree v (Node v a) -> Digit a -> a -> a -> a -> Digit a -> FingerTree v (Node v a) -> FingerTree v (Node v a)
-addDigits3 m1 (One a) b c d (One e) m2 =
-    appendTree2 m1 (node3 a b c) (node2 d e) m2
-addDigits3 m1 (One a) b c d (Two e f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits3 m1 (One a) b c d (Three e f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits3 m1 (One a) b c d (Four e f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits3 m1 (Two a b) c d e (One f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits3 m1 (Two a b) c d e (Two f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits3 m1 (Two a b) c d e (Three f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits3 m1 (Two a b) c d e (Four f g h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits3 m1 (Three a b c) d e f (One g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits3 m1 (Three a b c) d e f (Two g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits3 m1 (Three a b c) d e f (Three g h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits3 m1 (Three a b c) d e f (Four g h i j) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node2 g h) (node2 i j) m2
-addDigits3 m1 (Four a b c d) e f g (One h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits3 m1 (Four a b c d) e f g (Two h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits3 m1 (Four a b c d) e f g (Three h i j) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node2 g h) (node2 i j) m2
-addDigits3 m1 (Four a b c d) e f g (Four h i j k) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node3 g h i) (node2 j k) m2
+-- instance Applicative FingerTree where
+--   pure :: a -> FingerTree a
+--   pure = Unit
 
-appendTree4 :: (Measured v a) => FingerTree v a -> a -> a -> a -> a -> FingerTree v a -> FingerTree v a
-appendTree4 Empty a b c d xs =
-    a <| b <| c <| d <| xs
-appendTree4 xs a b c d Empty =
-    xs |> a |> b |> c |> d
-appendTree4 (Single x) a b c d xs =
-    x <| a <| b <| c <| d <| xs
-appendTree4 xs a b c d (Single x) =
-    xs |> a |> b |> c |> d |> x
-appendTree4 (Deep _ pr1 m1 sf1) a b c d (Deep _ pr2 m2 sf2) =
-    deep pr1 (addDigits4 m1 sf1 a b c d pr2 m2) sf2
+--   (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
+--   Nil <*> _ = Nil
+-- 	_ <*> Nil = Nil
+-- 	(Unit f) <*> (Unit x) = Unit (f x)
+--   (Unit f) <*> (More _ _ x _) = Unit (f x)
+-- 	(Node _ f _) <*> (Unit v) = undefined
+-- 	(Node l f r) <*> (Node l' v r') =
+-- 		Node (l <*> l') (f v) (r <*> r')
 
-addDigits4 :: (Measured v a) => FingerTree v (Node v a) -> Digit a -> a -> a -> a -> a -> Digit a -> FingerTree v (Node v a) -> FingerTree v (Node v a)
-addDigits4 m1 (One a) b c d e (One f) m2 =
-    appendTree2 m1 (node3 a b c) (node3 d e f) m2
-addDigits4 m1 (One a) b c d e (Two f g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits4 m1 (One a) b c d e (Three f g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits4 m1 (One a) b c d e (Four f g h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits4 m1 (Two a b) c d e f (One g) m2 =
-    appendTree3 m1 (node3 a b c) (node2 d e) (node2 f g) m2
-addDigits4 m1 (Two a b) c d e f (Two g h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits4 m1 (Two a b) c d e f (Three g h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits4 m1 (Two a b) c d e f (Four g h i j) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node2 g h) (node2 i j) m2
-addDigits4 m1 (Three a b c) d e f g (One h) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node2 g h) m2
-addDigits4 m1 (Three a b c) d e f g (Two h i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits4 m1 (Three a b c) d e f g (Three h i j) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node2 g h) (node2 i j) m2
-addDigits4 m1 (Three a b c) d e f g (Four h i j k) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node3 g h i) (node2 j k) m2
-addDigits4 m1 (Four a b c d) e f g h (One i) m2 =
-    appendTree3 m1 (node3 a b c) (node3 d e f) (node3 g h i) m2
-addDigits4 m1 (Four a b c d) e f g h (Two i j) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node2 g h) (node2 i j) m2
-addDigits4 m1 (Four a b c d) e f g h (Three i j k) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node3 g h i) (node2 j k) m2
-addDigits4 m1 (Four a b c d) e f g h (Four i j k l) m2 =
-    appendTree4 m1 (node3 a b c) (node3 d e f) (node3 g h i) (node3 j k l) m2
+instance Monoid (FingerTree a) where
+  mempty :: FingerTree a
+  mempty = Nil
 
+instance Semigroup (FingerTree a) where
+  (<>) = append
 
+instance Foldable FingerTree where
+  foldMap :: Monoid m => (a -> m) -> FingerTree a -> m
+  foldMap f Nil = mempty
+  foldMap f (Unit x) = f x
+  foldMap f (More n l t r) = foldMap f l `mappend` foldMap (foldMap f) t `mappend` foldMap f r
 
--- Helper functions i dont understand fully:
--- | /O(1)/. Analyse the right end of a sequence.
-viewr :: (Measured v a) => FingerTree v a -> ViewR (FingerTree v) a
-viewr Empty                     =  EmptyR
-viewr (Single x)                =  Empty :> x
-viewr (Deep _ pr m (One x))     =  rotR pr m :> x
-viewr (Deep _ pr m sf)          =  deep pr m (rtailDigit sf) :> rheadDigit sf
+instance Foldable Tuple where
+  foldMap :: Monoid m => (a -> m) -> Tuple a -> m
+  foldMap f (Pair x y) = f x `mappend` f y
+  foldMap f (Triple x y z) = f x `mappend` f y `mappend` f z
 
-rotR :: (Measured v a) => Digit a -> FingerTree v (Node v a) -> FingerTree v a
-rotR pr m = case viewr m of
-    EmptyR  ->  digitToTree pr
-    m' :> a ->  Deep (measure pr `mappend` measure m) pr m' (nodeToDigit a)
+instance Foldable Some where
+  foldMap :: Monoid m => (a -> m) -> Tuple a -> m
+  foldMap f (One x) = f x
+  foldMap f (Two x y) = f x `mappend` f y
+  foldMap f (Three x y z) = f x `mappend` f y `mappend` f z
 
-rheadDigit :: Digit a -> a
-rheadDigit (One a) = a
-rheadDigit (Two _ b) = b
-rheadDigit (Three _ _ c) = c
-rheadDigit (Four _ _ _ d) = d
+-- foldr f z (Node l k r) = foldr f (f k (foldr f z r)) l
 
-rtailDigit :: Digit a -> Digit a
-rtailDigit (One _) = undefined -- TODO
-rtailDigit (Two a _) = One a
-rtailDigit (Three a b _) = Two a b
-rtailDigit (Four a b c _) = Three a b c
+instance Traversable FingerTree where
+  traverse :: Applicative z => (a -> z b) -> FingerTree a -> z (FingerTree b)
+  traverse f t = undefined
 
-digitToTree :: (Measured v a) => Digit a -> FingerTree v a
-digitToTree (One a) = Single a
-digitToTree (Two a b) = deep (One a) Empty (One b)
-digitToTree (Three a b c) = deep (Two a b) Empty (One c)
-digitToTree (Four a b c d) = deep (Two a b) Empty (Two c d)
+------ Functions ------
 
--- | /O(1)/. Analyse the left end of a sequence.
-viewl :: (Measured v a) => FingerTree v a -> ViewL (FingerTree v) a
-viewl Empty                     =  EmptyL
-viewl (Single x)                =  x :< Empty
-viewl (Deep _ (One x) m sf)     =  x :< rotL m sf
-viewl (Deep _ pr m sf)          =  lheadDigit pr :< deep (ltailDigit pr) m sf
+-- TODO check i is updated correctly
+insertHead :: a -> FingerTree a -> FingerTree a
+insertHead a Nil = Unit a
+insertHead a (Unit l b) = More (l + measure a) (One a) Nil (One b)
+insertHead a (More l (One il b) ft r) =
+  More (l + measure a) (Two (il + measure a) a b) ft r
+insertHead a (More l (Two il b c) ft r) =
+  More (l + measure a) (Three (il + measure a) a b c) ft r
+insertHead a (More l (Three il b c d) ft r) =
+  More
+    (l + measure a)
+    (Two (measure a + measure b) a b)
+    (insertHead (Pair (measure c + measure d) c d) ft)
+    r
 
-rotL :: (Measured v a) => FingerTree v (Node v a) -> Digit a -> FingerTree v a
-rotL m sf      =   case viewl m of
-    EmptyL  ->  digitToTree sf
-    a :< m' ->  Deep (measure m `mappend` measure sf) (nodeToDigit a) m' sf
+-- TODO check i is updated correctly
+insertTail :: a -> FingerTree a -> FingerTree a
+insertTail z Nil = Unit z
+insertTail z (Unit s a) = More 2 (One a) Nil (One z)
+insertTail z (More s l ft (One is a)) =
+  More (s + measure z) l ft (Two (is + measure z) a z)
+insertTail z (More s l ft (Two is a b)) =
+  More (s + measure z) l ft (Three (is + measure z) a b z)
+insertTail z (More s l ft (Three is a b c)) =
+  More
+    (s + measure z)
+    l
+    (insertTail (Pair (measure a + measure b) a b) ft)
+    (Two (measure c + measure z) c z)
 
-lheadDigit :: Digit a -> a
-lheadDigit (One a) = a
-lheadDigit (Two a _) = a
-lheadDigit (Three a _ _) = a
-lheadDigit (Four a _ _ _) = a
+head :: FingerTree a -> Maybe a
+head Nil = Nothing
+head (Unit _ x) = Just x
+head (More _ (One _ x) _ _) = Just x
+head (More _ (Two _ x _) _ _) = Just x
+head (More _ (Three _ x _ _) _ _) = Just x
 
-ltailDigit :: Digit a -> Digit a
-ltailDigit (One _) = undefined -- TODO
-ltailDigit (Two _ b) = One b
-ltailDigit (Three _ b c) = Two b c
-ltailDigit (Four _ b c d) = Three b c d
+-- TODO check i
+tail :: FingerTree a -> Maybe (FingerTree a)
+tail (More i (Three _ _ x y) ft r) = Just $ More (i - 1) (Two x y) ft r
+tail (More i (Two _ _ x) ft r) = Just $ More (i - 1) (One x) ft r
+tail (More i (One _ _) ft r) = case (ft, r) of
+  (Nil, One x) -> Just $ Unit x
+  (Nil, Two x y) -> Just $ More (i - 1) (One x) Nil (One y)
+  (Nil, Three x y z) -> Just $ More (i - 1) (One x) Nil (Two y z)
+  _ -> undefined
+
+-- case FingerTree.head ft of
+--   Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
+
+last :: FingerTree a -> Maybe a
+last Nil = Nothing
+last (Unit _ x) = Just x
+last (More _ _ _ (One _ x)) = Just x
+last (More _ _ _ (Two _ _ x)) = Just x
+last (More _ _ _ (Three _ _ _ x)) = Just x
+
+removeTail :: FingerTree a -> FingerTree a
+removeTail = undefined
+
+isEmpty :: FingerTree a -> Bool
+isEmpty t = undefined
+
+append :: FingerTree a -> FingerTree a -> FingerTree a
+append t1 = glue t1 []
+
+glue :: FingerTree a -> [a] -> FingerTree a -> FingerTree a
+glue Nil l t2 = foldr insertHead t2 l
+glue t1 l Nil = foldl (flip insertTail) t1 l
+glue (Unit _ x) l t2 = foldr insertHead t2 (x : l)
+glue t1 l (Unit _ y) = foldl (flip insertTail) t1 (l ++ [y])
+glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) =
+  More i1 x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
+
+someToList :: Some a -> [a]
+someToList (One _ x) = [x]
+someToList (Two _ x y) = [x, y]
+
+listToTuples :: [a] -> [Tuple a]
+listToTuples [] = []
+listToTuples [x, y] = [Pair x y]
+listToTuples [x, y, z, w] = [Pair x y, Pair z w]
+listToTuples (x : y : z : xs) = Triple x y z : listToTuples xs
+
+-- split :: Measured v a => (v -> Bool) -> FingerTree v a -> (FingerTree v a, FingerTree v a)
+-- split t = undefined
+
+concat :: [FingerTree a] -> FingerTree a
+concat l = undefined
+
+-- TODO: Figure out what to do if this contains tuples
+toList :: FingerTree a -> [a]
+toList Nil = []
+toList (Unit _ x) = undefined
+toList (More _ l ft r) = undefined
+
+length :: FingerTree a -> Int
+length Nil = 0
+length (Unit l _) = l
+length (More l _ _ _) = l
+
+-- ft8 :: FingerTree Int
+-- ft8 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
+
+fromList :: [a] -> FingerTree a
+fromList = foldr insertHead Nil
+
+instance (Show a, Arbitrary a) => Arbitrary (FingerTree a) where
+  arbitrary = undefined
+
+  shrink :: a -> [a]
+  shrink Nil = []
+  shrink (Unit _) = [Nil]
+  shrink (More n l t r) = someToTreeList l ++ someToTreeList r ++ shrink (fromList (toList t)) ++ [Nil]
+
+someToTreeList :: Some a -> [FingerTree a]
+someToTreeList (One _ x) = [Unit x]
+someToTreeList (Two _ x y) = [Unit x, Unit y, More 2 (One x) Nil (One y)]
+
+tSplitSome :: Test
+tSplitSome =
+  TestList
+    [ "splitSome singleton" ~: splitSome 0 0 (One 3) ~?= Split Nil 3 Nil,
+      "splitSome Two after zero index"
+        ~: splitSome 1 0 (Two 3 4) ~?= Split Nil 3 (Unit 4),
+      "splitSome Two after nonzero index"
+        ~: splitSome 9 8 (Two 3 4) ~?= Split Nil 3 (Unit 4),
+      "splitSome Two - no split, target=curent"
+        ~: splitSome 0 0 (Two 3 4) ~?= Split (Unit 3) 4 Nil,
+      "splitSome Two - no split, diff too big"
+        ~: splitSome 3 1 (Two 3 4)
+          ~?= Split
+            (Unit 3)
+            4
+            Nil,
+      "splitSome Three after first, zero index"
+        ~: splitSome 1 0 (Three 4 5 6) ~?= Split Nil 4 (insertHead 5 (Unit 6)),
+      "splitSome Three after first, nonzero index"
+        ~: splitSome 9 8 (Three 4 5 6) ~?= Split Nil 4 (insertHead 5 (Unit 6)),
+      "splitSome Three - split after second"
+        ~: splitSome 6 4 (Three 9 10 11) ~?= Split (Unit 9) 10 (Unit 11),
+      "splitSome Three - no split, target=current"
+        ~: splitSome 4 4 (Three 7 8 9)
+        ~?= Split (insertHead 7 (Unit 8)) 9 Nil
+    ]
+
+ft1 :: FingerTree Int
+ft1 = Unit 1
+
+ft2 :: FingerTree Int
+ft2 = More 2 (One 1) Nil (One 2)
+
+ft3 :: FingerTree Int
+ft3 = More 3 (One 1) Nil (Two 2 3)
+
+ft4 :: FingerTree Int
+ft4 = More 4 (One 1) Nil (Three 2 3 4)
+
+tSplitTree :: Test
+tSplitTree =
+  TestList
+    [ "splitTree len 1" ~: splitTree 0 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 1, offset index" ~: splitTree 2 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 2 at 0" ~: splitTree 0 0 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 0, offset index"
+        ~: splitTree 3 3 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 1" ~: splitTree 1 0 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 2 at 1, offset index"
+        ~: splitTree 3 2 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 3 at 0"
+        ~: splitTree 0 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 3 at 1"
+        ~: splitTree 1 0 ft3 ~?= Split Nil 1 (More 2 (One 2) Nil (One 3)),
+      "splitTree len 3 at 2"
+        ~: splitTree 2 0 ft3 ~?= Split (Unit 1) 2 (Unit 3),
+      "splitTree len 3 at hi"
+        ~: splitTree 3 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 4 at 0"
+        ~: splitTree 0 0 ft4 ~?= undefined,
+      "splitTree len 4 at 1"
+        ~: splitTree 1 0 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
+      "splitTree len 4 at 2"
+        ~: splitTree 2 0 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
+      "splitTree len 4 at 3"
+        ~: splitTree 3 0 ft4 ~?= Split (More 2 (One 1) Nil (One 2)) 3 (Unit 4)
+    ]
+
+ft3 :: FingerTree Int
+ft3 = More 3 (One 1) Nil (Two 2 3)
+
+ft4 :: FingerTree Int
+ft4 = More 4 (One 1) Nil (Three 2 3 4)
+
+tSplitTree :: Test
+tSplitTree =
+  TestList
+    [ "splitTree len 1" ~: splitTree 0 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 1, offset index" ~: splitTree 2 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 2 at 0" ~: splitTree 0 0 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 0, offset index"
+        ~: splitTree 3 3 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 1" ~: splitTree 1 0 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 2 at 1, offset index"
+        ~: splitTree 3 2 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 3 at 0"
+        ~: splitTree 0 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 3 at 1"
+        ~: splitTree 1 0 ft3 ~?= Split Nil 1 (More 2 (One 2) Nil (One 3)),
+      "splitTree len 3 at 2"
+        ~: splitTree 2 0 ft3 ~?= Split (Unit 1) 2 (Unit 3),
+      "splitTree len 3 at hi"
+        ~: splitTree 3 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 4 at 0"
+        ~: splitTree 0 0 ft4 ~?= undefined,
+      "splitTree len 4 at 1"
+        ~: splitTree 1 0 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
+      "splitTree len 4 at 2"
+        ~: splitTree 2 0 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
+      "splitTree len 4 at 3"
+        ~: splitTree 3 0 ft4 ~?= Split (More 2 (One 1) Nil (One 2)) 3 (Unit 4)
+    ]
+
+ft3 :: FingerTree Int
+ft3 = More 3 (One 1) Nil (Two 2 3)
+
+ft4 :: FingerTree Int
+ft4 = More 4 (One 1) Nil (Three 2 3 4)
+
+tSplitTree :: Test
+tSplitTree =
+  TestList
+    [ "splitTree len 1" ~: splitTree 0 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 1, offset index" ~: splitTree 2 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 2 at 0" ~: splitTree 0 0 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 0, offset index"
+        ~: splitTree 3 3 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 1" ~: splitTree 1 0 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 2 at 1, offset index"
+        ~: splitTree 3 2 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 3 at 0"
+        ~: splitTree 0 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 3 at 1"
+        ~: splitTree 1 0 ft3 ~?= Split Nil 1 (More 2 (One 2) Nil (One 3)),
+      "splitTree len 3 at 2"
+        ~: splitTree 2 0 ft3 ~?= Split (Unit 1) 2 (Unit 3),
+      "splitTree len 3 at hi"
+        ~: splitTree 3 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 4 at 0"
+        ~: splitTree 0 0 ft4 ~?= undefined,
+      "splitTree len 4 at 1"
+        ~: splitTree 1 0 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
+      "splitTree len 4 at 2"
+        ~: splitTree 2 0 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
+      "splitTree len 4 at 3"
+        ~: splitTree 3 0 ft4 ~?= Split (More 2 (One 1) Nil (One 2)) 3 (Unit 4)
+    ]
+
+ft3 :: FingerTree Int
+ft3 = More 3 (One 1) Nil (Two 2 3)
+
+ft4 :: FingerTree Int
+ft4 = More 4 (One 1) Nil (Three 2 3 4)
+
+tSplitTree :: Test
+tSplitTree =
+  TestList
+    [ "splitTree len 1" ~: splitTree 0 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 1, offset index" ~: splitTree 2 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 2 at 0" ~: splitTree 0 0 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 0, offset index"
+        ~: splitTree 3 3 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 1" ~: splitTree 1 0 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 2 at 1, offset index"
+        ~: splitTree 3 2 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 3 at 0"
+        ~: splitTree 0 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 3 at 1"
+        ~: splitTree 1 0 ft3 ~?= Split Nil 1 (More 2 (One 2) Nil (One 3)),
+      "splitTree len 3 at 2"
+        ~: splitTree 2 0 ft3 ~?= Split (Unit 1) 2 (Unit 3),
+      "splitTree len 3 at hi"
+        ~: splitTree 3 0 ft3 ~?= Split (More 2 (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 4 at 0"
+        ~: splitTree 0 0 ft4 ~?= undefined,
+      "splitTree len 4 at 1"
+        ~: splitTree 1 0 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
+      "splitTree len 4 at 2"
+        ~: splitTree 2 0 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
+      "splitTree len 4 at 3"
+        ~: splitTree 3 0 ft4 ~?= Split (More 2 (One 1) Nil (One 2)) 3 (Unit 4)
+    ]
