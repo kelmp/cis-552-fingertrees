@@ -29,7 +29,7 @@ instance Monad Sequence where
 
 instance Functor Sequence where
   fmap :: (a -> b) -> Sequence a -> Sequence b
-  fmap f t = FingerTree . (>>=)
+  fmap f t = FingerTree.fmap
 
 instance Applicative Sequence where
   pure :: a -> Sequence a

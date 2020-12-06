@@ -12,91 +12,89 @@ import Data.Semigroup
 import Data.Traversable
 import FingerTree
 
-data PriorityQueue a = PriorityQueue {ft :: FingerTree a, kind :: MinOrMax}
+newtype PriorityQueue a = Ord a => FingerTree a
 
-data MinOrMax = MinQueue | MaxQueue
+-- Invariants:
+-- a must be instance of Ord
+-- head is min, last is max (smallest priority to greatest)
+
+-- data PriorityQueue a = PriorityQueue {ft :: FingerTree a, kind :: MinOrMax}
+
+-- data MinOrMax = MinQueue | MaxQueue
 
 -- Instances --
 
 instance Monad PriorityQueue where
   return :: a -> PriorityQueue a
-  return x = undefined
+  return = pure
 
   (>>=) :: PriorityQueue a -> (a -> PriorityQueue b) -> PriorityQueue b
-  t >>= f = undefined
+  t >>= f = FingerTree . (>>=)
+
+-- foldl add empty t
+--  where
+--   add x y = x >< f y
 
 instance Functor PriorityQueue where
   fmap :: (a -> b) -> PriorityQueue a -> PriorityQueue b
-  fmap f t = undefined
+  fmap f t = FingerTree.fmap
 
 instance Applicative PriorityQueue where
   pure :: a -> PriorityQueue a
-  pure t = undefined
+  pure t = undefined -- TODO
 
   (<*>) :: PriorityQueue (a -> b) -> PriorityQueue a -> PriorityQueue b
-  t1 <*> t2 = undefined
+  t1 <*> t2 = FingerTree . (<*>)
 
 instance Monoid (PriorityQueue a) where
   mempty :: PriorityQueue a
-  mempty = undefined
+  mempty = empty
 
 instance Semigroup (PriorityQueue a) where
-  (<>) = undefined
+  (<>) = FingerTree . (<>)
 
 instance Foldable PriorityQueue where
   foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
-  foldMap f t = undefined
+  foldMap f t = FingerTree.foldMap
 
   foldr :: (a -> b -> b) -> b -> PriorityQueue a -> b
-  foldr f b t = undefined
+  foldr f b t = FingerTree.foldr f b t
 
 instance Traversable PriorityQueue where
   traverse :: Applicative z => (a -> z b) -> PriorityQueue a -> z (PriorityQueue b)
-  traverse f t = undefined
+  traverse f t = FingerTree.traverse f t
 
 ------ Functions ------
 
-emptyMaxQueue :: PriorityQueue a
-emptyMaxQueue = undefined
+empty :: PriorityQueue a
+empty = Nil
 
-emptyMinQueue :: PriorityQueue a
-emptyMinQueue = undefined
-
-nullMinQueue :: PriorityQueue a
-nullMinQueue = undefined
-
-nullMaxQueue :: PriorityQueue a
-nullMaxQueue = undefined
+singleton :: Ord a => a -> PriorityQueue a
+singleton = Unit
 
 size :: PriorityQueue a -> Int
-size = undefined
+size = length
 
-findMax :: PriorityQueue a -> Maybe a
-findMax = undefined
+peekMax :: PriorityQueue a -> Maybe a
 
-findMin :: PriorityQueue a -> Maybe a
-findMin = undefined
+findMax = last
 
-getMax :: PriorityQueue a -> Maybe a
-getMax = undefined
+peekMin :: PriorityQueue a -> Maybe a
 
-getMin :: PriorityQueue a -> Maybe a
-getMin = undefined
+findMin = head
 
 deleteMax :: PriorityQueue a -> PriorityQueue a
-deleteMax = undefined
+deleteMax = removeTail
 
 deleteMin :: PriorityQueue a -> PriorityQueue a
-deleteMin = undefined
+deleteMin = removeHead
 
-singletonMax :: a -> PriorityQueue a
-singletonMax = undefined
-
-singletonMin :: a -> PriorityQueue a
-singletonMin = undefined
-
-insert :: Ord a => a -> PriorityQueue a -> PriorityQueue a -> PriorityQueue a
-insert = undefined
+enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
+enqueue x q =
+  let (t1, t2) = split (<= x) q
+   in append (insertHead t2 x) t2
 
 union :: Ord a => PriorityQueue a -> PriorityQueue a -> PriorityQueue a
-union = undefined
+union q1 q2 = foldr (\acc x -> enqueue x acc) q1 q2
+
+-- insert all the elements from second queue into the first one
