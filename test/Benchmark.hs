@@ -28,7 +28,7 @@ listBench =
             bgroup
               "fingertree versus list repeated append/1000 + 1000"
               [ bench "fingertree" $ nf $ foldr FT.insertTail fts [0] ls [1],
-                bench "avl" $ nf $ foldr (\x acc -> acc ++ [x]) ls [0] ls [1]
+                bench "list" $ nf $ foldr (\x acc -> acc ++ [x]) ls [0] ls [1]
               ]
         ),
       env
@@ -37,7 +37,7 @@ listBench =
             bgroup
               "fingertree versus list concat/1000 + 1000"
               [ bench "fingertree" $ nf $ FT.append fts [0] fts [1],
-                bench "avl" $ nf $ ls [1] ++ ls [2]
+                bench "list" $ nf $ ls [1] ++ ls [2]
               ]
         )
     ]

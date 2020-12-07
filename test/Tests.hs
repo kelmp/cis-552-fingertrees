@@ -216,6 +216,51 @@ tConcat =
 -- "Concat both simple" ~: undefined,
 -- "Concat both complex" ~: undefined
 
+-- TODO split tuple
+
+tSplitSome :: Test
+tSplitSome =
+  TestList
+    [ "splitSome singleton" ~: splitSome 0 (One 3) ~?= Split Nothing 3 Nothing,
+      "splitSome Two at 0 (no split)"
+        ~: splitSome 0 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
+      "splitSome Two at 1"
+        ~: splitSome 1 (Two 3 4) ~?= Split Nothing 3 (Just (One 4)),
+      "splitSome Two at 2 (no split)"
+        ~: splitSome 2 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
+      "splitSome Three at 0 (no split)"
+        ~: splitSome 0 (Three 7 8 9)
+        ~?= Split (Just (Two 7 8)) 9 Nothing,
+      "splitSome Three at 1"
+        ~: splitSome 1 (Three 7 8 9) ~?= Split Nothing 7 (Just (Two 8 9)),
+      "splitSome Three at 2"
+        ~: splitSome 2 (Three 7 8 9) ~?= Split (Just (One 7)) 8 (Just (One 9))
+    ]
+
+tSplitTree :: Test
+tSplitTree =
+  TestList
+    [ "splitTree len 1" ~: splitTree 0 ft1 ~?= Split Nil 1 Nil,
+      "splitTree len 2 at 0" ~: splitTree 0 ft2 ~?= Split (Unit 1) 2 Nil,
+      "splitTree len 2 at 1" ~: splitTree 1 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 3 at 0"
+        ~: splitTree 0 ft3 ~?= Split (more (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 3 at 1"
+        ~: splitTree 1 ft3 ~?= Split Nil 1 (more (One 2) Nil (One 3)),
+      "splitTree len 3 at 2"
+        ~: splitTree 2 ft3 ~?= Split (Unit 1) 2 (Unit 3),
+      "splitTree len 3 at hi"
+        ~: splitTree 3 ft3 ~?= Split (more (One 1) Nil (One 2)) 3 Nil,
+      "splitTree len 4 at 0"
+        ~: splitTree 0 ft4 ~?= Split (more (One 1) Nil (Two 2 3)) 4 Nil,
+      "splitTree len 4 at 1"
+        ~: splitTree 1 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
+      "splitTree len 4 at 2"
+        ~: splitTree 2 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
+      "splitTree len 4 at 3"
+        ~: splitTree 3 ft4 ~?= Split (More 2 (One 1) Nil (One 2)) 3 (Unit 4)
+    ]
+
 tSplit :: Test
 tSplit =
   TestList
