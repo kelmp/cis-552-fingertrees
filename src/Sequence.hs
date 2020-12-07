@@ -13,6 +13,7 @@ import Data.Traversable
 import FingerTree
 
 newtype Sequence a = Seq (FingerTree a)
+  deriving (Eq, Show)
 
 -- Instances --
 
@@ -27,9 +28,9 @@ newtype Sequence a = Seq (FingerTree a)
 --  where
 --   add x y = x >< f y
 
-instance Functor Sequence where
-  fmap :: (a -> b) -> Sequence a -> Sequence b
-  fmap f (Seq t) = Seq (FingerTree.fmap' f t)
+-- instance Measured a => Functor (Sequence a) where
+--   fmap :: (a -> b) -> Sequence a -> Sequence b
+--   fmap f (Seq t) = Seq (FingerTree.fmap' f t)
 
 -- instance Applicative Sequence where
 --   pure :: a -> Sequence a
@@ -38,16 +39,16 @@ instance Functor Sequence where
 --   (<*>) :: Sequence (a -> b) -> Sequence a -> Sequence b
 --   (Seq t1) <*> (Seq t2) = Seq (FingerTree.(<*>) t1 t2)
 
-instance Monoid (Sequence a) where
+instance Measured a => Monoid (Sequence a) where
   mempty :: Sequence a
   mempty = Seq Nil
 
-instance Semigroup (Sequence a) where
+instance Measured a => Semigroup (Sequence a) where
   (Seq t1) <> (Seq t2) = Seq ((<>) t1 t2)
 
-instance Foldable Sequence where
-  foldMap :: Monoid m => (a -> m) -> Sequence a -> m
-  foldMap f (Seq t) = Seq (foldMap f t)
+-- instance Foldable Sequence where
+--   foldMap :: Monoid m => (a -> m) -> Sequence a -> m
+--   foldMap f (Seq t) = Seq (foldMap f t)
 
 -- instance Traversable Sequence where
 --   traverse :: Applicative z => (a -> z b) -> Sequence a -> z (Sequence b)
@@ -94,13 +95,13 @@ insertAt = undefined
 fromList :: Measured a => [a] -> Sequence a
 fromList = Seq . FingerTree.fromList
 
-null :: Measured a => Sequence a -> Bool
+null :: Eq a => Measured a => Sequence a -> Bool
 null (Seq t) = t == Nil
 
 length :: Measured a => Sequence a -> Int
-length = measure
+length (Seq t) = measure t
 
-lookup :: Measured a => Int -> Sequence a -> Maybe a
+lookup :: Eq a => Measured a => Int -> Sequence a -> Maybe a
 lookup x (Seq t) =
   let (_, t2) = split x t
    in if t2 /= Nil then FingerTree.head t2 else Nothing

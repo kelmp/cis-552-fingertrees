@@ -35,9 +35,9 @@ newtype PriorityQueue a = PQ (FingerTree a)
 --  where
 --   add x y = x >< f y
 
-instance Functor PriorityQueue where
-  fmap :: (a -> b) -> PriorityQueue a -> PriorityQueue b
-  fmap f (PQ t) = PQ (FT.fmap' f t)
+-- instance Functor PriorityQueue where
+--   fmap :: (a -> b) -> PriorityQueue a -> PriorityQueue b
+--   fmap f (PQ t) = PQ (FT.fmap' f t)
 
 -- instance Applicative PriorityQueue where
 --   pure :: a -> PriorityQueue a
@@ -46,16 +46,16 @@ instance Functor PriorityQueue where
 --   (<*>) :: PriorityQueue (a -> b) -> PriorityQueue a -> PriorityQueue b
 --   t1 <*> t2 = FingerTree . (<*>)
 
-instance Monoid (PriorityQueue a) where
+instance Measured a => Monoid (PriorityQueue a) where
   mempty :: PriorityQueue a
   mempty = PQ Nil
 
-instance Semigroup (PriorityQueue a) where
+instance Measured a => Semigroup (PriorityQueue a) where
   (PQ t1) <> (PQ t2) = PQ ((<>) t1 t2)
 
-instance Foldable PriorityQueue where
-  foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
-  foldMap f (PQ t) = PQ (foldMap f t)
+-- instance Foldable PriorityQueue where
+--   foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
+--   foldMap f (PQ t) = PQ (foldMap f t)
 
 -- foldr :: (a -> b -> b) -> b -> PriorityQueue a -> b
 -- foldr f b t = FT.foldr f b t
@@ -69,32 +69,32 @@ instance Foldable PriorityQueue where
 empty :: PriorityQueue a
 empty = PQ Nil
 
-singleton :: Ord a => a -> PriorityQueue a
+singleton :: Measured a => Ord a => a -> PriorityQueue a
 singleton = PQ . Unit
 
-size :: PriorityQueue a -> Int
+size :: Measured a => PriorityQueue a -> Int
 size (PQ t) = measure t
 
-peekMax :: PriorityQueue a -> Maybe a
+peekMax :: Measured a => PriorityQueue a -> Maybe a
 peekMax (PQ t) = FT.last t
 
-peekMin :: PriorityQueue a -> Maybe a
+peekMin :: Measured a => PriorityQueue a -> Maybe a
 peekMin (PQ t) = FT.head t
 
-deleteMax :: PriorityQueue a -> PriorityQueue a
+deleteMax :: Measured a => PriorityQueue a -> PriorityQueue a
 deleteMax (PQ t) = PQ (removeTail t)
 
-deleteMin :: PriorityQueue a -> PriorityQueue a
+deleteMin :: Measured a => PriorityQueue a -> PriorityQueue a
 deleteMin (PQ t) = case FT.tail t of
   Just v -> PQ v
   _ -> PQ Nil
 
-enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
-enqueue x (PQ t) =
-  let (t1, t2) = split (<= x) t
-   in PQ (append (insertHead x t2) t2)
+-- enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
+-- enqueue x (PQ t) =
+--   let (t1, t2) = split (<= x) t
+--    in PQ (append (insertHead x t2) t2)
 
-union :: Ord a => PriorityQueue a -> PriorityQueue a -> PriorityQueue a
-union = flip enqueue
+-- union :: Ord a => PriorityQueue a -> PriorityQueue a -> PriorityQueue a
+-- union = flip enqueue
 
 -- insert all the elements from second queue into the first one
