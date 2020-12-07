@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module FingerTree where
 
@@ -55,8 +57,10 @@ data Tuple a
 -- Allows for O(1) retrieval of length via cached values
 class Measured a where
   measure :: a -> Int
+  default measure :: a -> Int
+  measure _ = 1
 
-instance Measured (FingerTree a) where
+instance Measured a => Measured (FingerTree a) where
   measure Nil = 0
   measure (Unit x) = measure x
   measure (More l _ _ _) = l
@@ -128,7 +132,7 @@ splitTree tgtI (More _ l ft r)
     startRight = startMiddle + measure ft
 
 -- Splits a FingerTree into two separate trees based on index.
-split :: Int -> FingerTree a -> (FingerTree a, FingerTree a)
+split :: Measured a => Int -> FingerTree a -> (FingerTree a, FingerTree a)
 split _ Nil = (Nil, Nil)
 split i ft =
   if i >= 0 && i < measure ft
@@ -137,7 +141,7 @@ split i ft =
        in (l, insertHead x r)
     else (ft, Nil)
 
-(!!) :: FingerTree a -> Int -> Maybe a
+(!!) :: Measured a => FingerTree a -> Int -> Maybe a
 ft !! i = case snd $ split i ft of
   Nil -> Nothing
   Unit x -> Just x
@@ -225,7 +229,7 @@ instance Functor Some where
 
 instance Functor Tuple where
   fmap :: (a -> b) -> Tuple a -> Tuple b
-  fmap f (Pair _ x y) = pair (f x) (f y)
+  fmap f (Pair _ x y) = Pair (measure (f x) + measure (f y)) (f x) (f y)
   fmap f (Triple _ x y z) = triple (f x) (f y) (f z)
 
 mapSome :: Some a -> (a -> b) -> Some b
@@ -233,24 +237,29 @@ mapSome (One x) f = One (f x)
 mapSome (Two x y) f = Two (f x) (f y)
 mapSome (Three x y z) f = Three (f x) (f y) (f z)
 
--- instance Applicative FingerTree where
---   pure :: a -> FingerTree a
---   pure = Unit
+instance Applicative FingerTree where
+  pure = undefined
+  (<*>) = undefined
 
---   (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
---   Nil <*> _ = Nil
--- 	_ <*> Nil = Nil
--- 	(Unit f) <*> (Unit x) = Unit (f x)
---   (Unit f) <*> (More _ _ x _) = Unit (f x)
--- 	(Node _ f _) <*> (Unit v) = undefined
--- 	(Node l f r) <*> (Node l' v r') =
--- 		Node (l <*> l') (f v) (r <*> r')
+instance Applicative FingerTree where
+  pure :: a -> FingerTree a
+  pure = Unit
 
-instance Monoid (FingerTree a) where
+  (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
+  Nil <*> _ = Nil
+	_ <*> Nil = Nil
+	(Unit f) <*> (Unit x) = Unit (f x)
+  (Unit f) <*> (More _ _ x _) = Unit (f x)
+	(Node _ f _) <*> (Unit v) = undefined
+	(Node l f r) <*> (Node l' v r') =
+		Node (l <*> l') (f v) (r <*> r')
+
+instance Measured a => Monoid (FingerTree a) where
   mempty :: FingerTree a
   mempty = Nil
 
-instance Semigroup (FingerTree a) where
+instance Measured a => Semigroup (FingerTree a) where
+  (<>) :: Measured a => FingerTree a -> FingerTree a -> FingerTree a
   (<>) = append
 
 instance Foldable FingerTree where
@@ -275,14 +284,14 @@ instance Traversable FingerTree where
   traverse f t = undefined -- TODO
 
 ------ Functions ------
-pair :: a -> a -> Tuple a
+pair :: Measured a => a -> a -> Tuple a
 pair a b = Pair (measure a + measure b) a b
 
-triple :: a -> a -> a -> Tuple a
+triple :: Measured a => a -> a -> a -> Tuple a
 triple a b c = Triple (measure a + measure b + measure c) a b c
 
 -- TODO check i is updated correctly
-insertHead :: a -> FingerTree a -> FingerTree a
+insertHead :: Measured a => a -> FingerTree a -> FingerTree a
 insertHead a Nil = Unit a
 insertHead a (Unit b) = more (One a) Nil (One b)
 insertHead a (More _ (One b) ft r) = more (Two a b) ft r
@@ -291,7 +300,7 @@ insertHead a (More _ (Three b c d) ft r) =
   more (Two a b) (insertHead (pair c d) ft) r
 
 -- TODO check i is updated correctly
-insertTail :: a -> FingerTree a -> FingerTree a
+insertTail :: Measured a => a -> FingerTree a -> FingerTree a
 insertTail z Nil = Unit z
 insertTail z (Unit a) = more (One a) Nil (One z)
 insertTail z (More _ l ft (One a)) = more l ft (Two a z)
@@ -330,12 +339,14 @@ removeTail :: FingerTree a -> FingerTree a
 removeTail = undefined
 
 isEmpty :: FingerTree a -> Bool
-isEmpty t = undefined
+isEmpty t = case t of
+  Nil -> True
+  _ -> False
 
-append :: FingerTree a -> FingerTree a -> FingerTree a
+append :: Measured a => FingerTree a -> FingerTree a -> FingerTree a
 append t1 = glue t1 []
 
-glue :: FingerTree a -> [a] -> FingerTree a -> FingerTree a
+glue :: Measured a => FingerTree a -> [a] -> FingerTree a -> FingerTree a
 glue Nil l t2 = foldr insertHead t2 l
 glue t1 l Nil = foldl (flip insertTail) t1 l
 glue (Unit x) l t2 = foldr insertHead t2 (x : l)
@@ -347,14 +358,11 @@ someToList :: Some a -> [a]
 someToList (One x) = [x]
 someToList (Two x y) = [x, y]
 
-listToTuples :: [a] -> [Tuple a]
+listToTuples :: Measured a => [a] -> [Tuple a]
 listToTuples [] = []
 listToTuples [x, y] = [pair x y]
 listToTuples [x, y, z, w] = [pair x y, pair z w]
 listToTuples (x : y : z : xs) = triple x y z : listToTuples xs
-
--- split :: Measured v a => (v -> Bool) -> FingerTree v a -> (FingerTree v a, FingerTree v a)
--- split t = undefined
 
 concat :: [FingerTree a] -> FingerTree a
 concat l = undefined
@@ -365,23 +373,20 @@ toList Nil = []
 toList (Unit x) = undefined
 toList (More _ l ft r) = undefined
 
--- ft8 :: FingerTree Int
--- ft8 = More (One 1) (More (One (Pair 2 3)) Nil (One (Pair 4 5))) (Three 6 7 8)
-
-fromList :: [a] -> FingerTree a
+fromList :: Measured a => [a] -> FingerTree a
 fromList = foldr insertHead Nil
 
-instance (Show a, Arbitrary a) => Arbitrary (FingerTree a) where
+instance (Show a, Arbitrary a, Measured a) => Arbitrary (FingerTree a) where
   arbitrary = undefined
 
-  shrink :: FingerTree a -> [FingerTree a]
+  shrink :: Measured a => FingerTree a -> [FingerTree a]
   shrink Nil = []
   shrink (Unit _) = [Nil]
   shrink (More _ l t r) =
     someToTreeList l ++ someToTreeList r ++ shrink (tupleTreeToTree t)
       ++ [Nil]
 
-tupleTreeToTree :: FingerTree (Tuple a) -> FingerTree a
+tupleTreeToTree :: Measured a => FingerTree (Tuple a) -> FingerTree a
 tupleTreeToTree Nil = Nil
 tupleTreeToTree (Unit (Pair _ x y)) = More 2 (One x) Nil (One y)
 tupleTreeToTree (Unit (Triple _ x y z)) = More 2 (Two x y) Nil (One z)
@@ -410,25 +415,6 @@ someToTreeList :: Some a -> [FingerTree a]
 someToTreeList (One x) = [Unit x]
 someToTreeList (Two x y) = [Unit x, Unit y, More 2 (One x) Nil (One y)]
 
-tSplitSome :: Test
-tSplitSome =
-  TestList
-    [ "splitSome singleton" ~: splitSome 0 (One 3) ~?= Split Nothing 3 Nothing,
-      "splitSome Two at 0 (no split)"
-        ~: splitSome 0 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
-      "splitSome Two at 1"
-        ~: splitSome 1 (Two 3 4) ~?= Split Nothing 3 (Just (One 4)),
-      "splitSome Two at 2 (no split)"
-        ~: splitSome 2 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
-      "splitSome Three at 0 (no split)"
-        ~: splitSome 0 (Three 7 8 9)
-        ~?= Split (Just (Two 7 8)) 9 Nothing,
-      "splitSome Three at 1"
-        ~: splitSome 1 (Three 7 8 9) ~?= Split Nothing 7 (Just (Two 8 9)),
-      "splitSome Three at 2"
-        ~: splitSome 2 (Three 7 8 9) ~?= Split (Just (One 7)) 8 (Just (One 9))
-    ]
-
 ft1 :: FingerTree Int
 ft1 = Unit 1
 
@@ -440,27 +426,3 @@ ft3 = More 3 (One 1) Nil (Two 2 3)
 
 ft4 :: FingerTree Int
 ft4 = More 4 (One 1) Nil (Three 2 3 4)
-
-tSplitTree :: Test
-tSplitTree =
-  TestList
-    [ "splitTree len 1" ~: splitTree 0 ft1 ~?= Split Nil 1 Nil,
-      "splitTree len 2 at 0" ~: splitTree 0 ft2 ~?= Split (Unit 1) 2 Nil,
-      "splitTree len 2 at 1" ~: splitTree 1 ft2 ~?= Split Nil 1 (Unit 2),
-      "splitTree len 3 at 0"
-        ~: splitTree 0 ft3 ~?= Split (more (One 1) Nil (One 2)) 3 Nil,
-      "splitTree len 3 at 1"
-        ~: splitTree 1 ft3 ~?= Split Nil 1 (more (One 2) Nil (One 3)),
-      "splitTree len 3 at 2"
-        ~: splitTree 2 ft3 ~?= Split (Unit 1) 2 (Unit 3),
-      "splitTree len 3 at hi"
-        ~: splitTree 3 ft3 ~?= Split (more (One 1) Nil (One 2)) 3 Nil,
-      "splitTree len 4 at 0"
-        ~: splitTree 0 ft4 ~?= Split (more (One 1) Nil (Two 2 3)) 4 Nil,
-      "splitTree len 4 at 1"
-        ~: splitTree 1 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
-      "splitTree len 4 at 2"
-        ~: splitTree 2 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
-      "splitTree len 4 at 3"
-        ~: splitTree 3 ft4 ~?= Split (More 2 (One 1) Nil (One 2)) 3 (Unit 4)
-    ]
