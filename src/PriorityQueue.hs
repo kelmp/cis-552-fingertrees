@@ -10,7 +10,7 @@ import Data.Functor
 import Data.Monoid
 import Data.Semigroup
 import Data.Traversable
-import FingerTree
+import FingerTree as FT
 
 newtype PriorityQueue a = Ord a => FingerTree a
 
@@ -37,7 +37,7 @@ instance Monad PriorityQueue where
 
 instance Functor PriorityQueue where
   fmap :: (a -> b) -> PriorityQueue a -> PriorityQueue b
-  fmap f t = FingerTree.fmap
+  fmap f t = FT.fmap
 
 instance Applicative PriorityQueue where
   pure :: a -> PriorityQueue a
@@ -55,14 +55,14 @@ instance Semigroup (PriorityQueue a) where
 
 instance Foldable PriorityQueue where
   foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
-  foldMap f t = FingerTree.foldMap
+  foldMap f t = FT.foldMap
 
   foldr :: (a -> b -> b) -> b -> PriorityQueue a -> b
-  foldr f b t = FingerTree.foldr f b t
+  foldr f b t = FT.foldr f b t
 
 instance Traversable PriorityQueue where
   traverse :: Applicative z => (a -> z b) -> PriorityQueue a -> z (PriorityQueue b)
-  traverse f t = FingerTree.traverse f t
+  traverse f t = FT.traverse f t
 
 ------ Functions ------
 
@@ -76,12 +76,10 @@ size :: PriorityQueue a -> Int
 size = length
 
 peekMax :: PriorityQueue a -> Maybe a
-
-findMax = last
+peekMax = FT.last
 
 peekMin :: PriorityQueue a -> Maybe a
-
-findMin = head
+peekMin = FT.head
 
 deleteMax :: PriorityQueue a -> PriorityQueue a
 deleteMax = removeTail
@@ -95,6 +93,6 @@ enqueue x q =
    in append (insertHead t2 x) t2
 
 union :: Ord a => PriorityQueue a -> PriorityQueue a -> PriorityQueue a
-union q1 q2 = foldr (\acc x -> enqueue x acc) q1 q2
+union = flip enqueue
 
 -- insert all the elements from second queue into the first one
