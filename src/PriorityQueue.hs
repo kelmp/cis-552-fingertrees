@@ -48,14 +48,14 @@ instance Functor PriorityQueue where
 
 instance Monoid (PriorityQueue a) where
   mempty :: PriorityQueue a
-  mempty = PQ (Nil)
+  mempty = PQ Nil
 
--- instance Semigroup (PriorityQueue a) where
---   (PQ t1) <> (PQ t2) = PQ (FingerTree . (<>) t1 t2)
+instance Semigroup (PriorityQueue a) where
+  (PQ t1) <> (PQ t2) = PQ ((<>) t1 t2)
 
--- instance Foldable PriorityQueue where
---   foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
---   foldMap f (PQ t) = PQ (FT.foldMap f t)
+instance Foldable PriorityQueue where
+  foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
+  foldMap f (PQ t) = PQ (foldMap f t)
 
 -- foldr :: (a -> b -> b) -> b -> PriorityQueue a -> b
 -- foldr f b t = FT.foldr f b t
@@ -85,7 +85,9 @@ deleteMax :: PriorityQueue a -> PriorityQueue a
 deleteMax (PQ t) = PQ (removeTail t)
 
 deleteMin :: PriorityQueue a -> PriorityQueue a
-deleteMin (PQ t) = PQ (removeHead t)
+deleteMin (PQ t) = case FT.tail t of
+  Just v -> PQ v
+  _ -> PQ Nil
 
 enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
 enqueue x (PQ t) =

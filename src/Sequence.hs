@@ -43,11 +43,11 @@ instance Monoid (Sequence a) where
   mempty = Seq Nil
 
 instance Semigroup (Sequence a) where
-  (Seq t1) <> (Seq t2) = Seq (FingerTree . (<>) t1 t2)
+  (Seq t1) <> (Seq t2) = Seq ((<>) t1 t2)
 
 instance Foldable Sequence where
   foldMap :: Monoid m => (a -> m) -> Sequence a -> m
-  foldMap f (Seq t) = Seq (FingerTree . f t)
+  foldMap f (Seq t) = Seq (foldMap f t)
 
 -- instance Traversable Sequence where
 --   traverse :: Applicative z => (a -> z b) -> Sequence a -> z (Sequence b)
@@ -58,16 +58,16 @@ instance Foldable Sequence where
 empty :: Sequence a
 empty = Seq Nil
 
-singleton :: a -> Sequence a
+singleton :: Measured a => a -> Sequence a
 singleton x = Seq $ Unit x
 
-(<|) :: a -> Sequence a -> Sequence a
+(<|) :: Measured a => a -> Sequence a -> Sequence a
 (<|) x (Seq t) = Seq (insertHead x t)
 
-(|>) :: Sequence a -> a -> Sequence a
+(|>) :: Measured a => Sequence a -> a -> Sequence a
 (|>) (Seq t) x = Seq (insertTail x t)
 
-(><) :: Sequence a -> Sequence a -> Sequence a
+(><) :: Measured a => Sequence a -> Sequence a -> Sequence a
 (><) (Seq t1) (Seq t2) = Seq (append t1 t2)
 
 first :: Sequence a -> Maybe a
@@ -79,26 +79,28 @@ last (Seq t1) = FingerTree.last t1
 deleteLast :: Sequence a -> Sequence a
 deleteLast (Seq t) = Seq (removeTail t)
 
-deleteAt :: Int -> Sequence a -> Sequence a
+deleteAt :: Measured a => Int -> Sequence a -> Sequence a
 deleteAt i (Seq t) =
   let (t1, t2) = split i t
    in case t2 of
         Nil -> Seq t
-        _ -> Seq (append t1 (removeHead t2))
+        _ -> case FingerTree.tail t2 of
+          Just v -> Seq (append t1 v)
+          _ -> Seq Nil
 
-insertAt :: Int -> a -> Sequence a -> Sequence a
+insertAt :: Measured a => Int -> a -> Sequence a -> Sequence a
 insertAt = undefined
 
-fromList :: [a] -> Sequence a
+fromList :: Measured a => [a] -> Sequence a
 fromList = Seq . FingerTree.fromList
 
-null :: Sequence a -> Bool
+null :: Measured a => Sequence a -> Bool
 null (Seq t) = t == Nil
 
-length :: Sequence a -> Int
+length :: Measured a => Sequence a -> Int
 length = measure
 
-lookup :: Int -> Sequence a -> Maybe a
+lookup :: Measured a => Int -> Sequence a -> Maybe a
 lookup x (Seq t) =
   let (_, t2) = split x t
    in if t2 /= Nil then FingerTree.head t2 else Nothing
