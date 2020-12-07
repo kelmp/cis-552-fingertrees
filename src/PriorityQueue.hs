@@ -85,9 +85,7 @@ deleteMax :: Measured a => PriorityQueue a -> PriorityQueue a
 deleteMax (PQ t) = PQ (removeTail t)
 
 deleteMin :: Measured a => PriorityQueue a -> PriorityQueue a
-deleteMin (PQ t) = case FT.tail t of
-  Just v -> PQ v
-  _ -> PQ Nil
+deleteMin (PQ t) = PQ $ FT.tail t
 
 -- enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
 -- enqueue x (PQ t) =

@@ -85,9 +85,7 @@ deleteAt i (Seq t) =
   let (t1, t2) = split i t
    in case t2 of
         Nil -> Seq t
-        _ -> case FingerTree.tail t2 of
-          Just v -> Seq (append t1 v)
-          _ -> Seq Nil
+        _ -> Seq $ append t1 $ FingerTree.tail t2
 
 insertAt :: Measured a => Int -> a -> Sequence a -> Sequence a
 insertAt = undefined
