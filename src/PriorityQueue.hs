@@ -12,7 +12,7 @@ import Data.Semigroup
 import Data.Traversable
 import FingerTree as FT
 
-newtype PriorityQueue a = Ord a => FingerTree a
+newtype PriorityQueue a = PQ (FingerTree a)
 
 -- Invariants:
 -- a must be instance of Ord
@@ -24,12 +24,12 @@ newtype PriorityQueue a = Ord a => FingerTree a
 
 -- Instances --
 
-instance Monad PriorityQueue where
-  return :: a -> PriorityQueue a
-  return = pure
+-- instance Monad PriorityQueue where
+--   return :: a -> PriorityQueue a
+--   return = pure
 
-  (>>=) :: PriorityQueue a -> (a -> PriorityQueue b) -> PriorityQueue b
-  t >>= f = FingerTree . (>>=)
+--   (>>=) :: PriorityQueue a -> (a -> PriorityQueue b) -> PriorityQueue b
+--   t >>= f = FingerTree . (>>=)
 
 -- foldl add empty t
 --  where
@@ -37,60 +37,60 @@ instance Monad PriorityQueue where
 
 instance Functor PriorityQueue where
   fmap :: (a -> b) -> PriorityQueue a -> PriorityQueue b
-  fmap f t = FT.fmap
+  fmap f (PQ t) = PQ (FT.fmap' f t)
 
-instance Applicative PriorityQueue where
-  pure :: a -> PriorityQueue a
-  pure t = undefined -- TODO
+-- instance Applicative PriorityQueue where
+--   pure :: a -> PriorityQueue a
+--   pure t = undefined -- TODO
 
-  (<*>) :: PriorityQueue (a -> b) -> PriorityQueue a -> PriorityQueue b
-  t1 <*> t2 = FingerTree . (<*>)
+--   (<*>) :: PriorityQueue (a -> b) -> PriorityQueue a -> PriorityQueue b
+--   t1 <*> t2 = FingerTree . (<*>)
 
 instance Monoid (PriorityQueue a) where
   mempty :: PriorityQueue a
-  mempty = empty
+  mempty = PQ (Nil)
 
-instance Semigroup (PriorityQueue a) where
-  (<>) = FingerTree . (<>)
+-- instance Semigroup (PriorityQueue a) where
+--   (PQ t1) <> (PQ t2) = PQ (FingerTree . (<>) t1 t2)
 
-instance Foldable PriorityQueue where
-  foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
-  foldMap f t = FT.foldMap
+-- instance Foldable PriorityQueue where
+--   foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
+--   foldMap f (PQ t) = PQ (FT.foldMap f t)
 
-  foldr :: (a -> b -> b) -> b -> PriorityQueue a -> b
-  foldr f b t = FT.foldr f b t
+-- foldr :: (a -> b -> b) -> b -> PriorityQueue a -> b
+-- foldr f b t = FT.foldr f b t
 
-instance Traversable PriorityQueue where
-  traverse :: Applicative z => (a -> z b) -> PriorityQueue a -> z (PriorityQueue b)
-  traverse f t = FT.traverse f t
+-- instance Traversable PriorityQueue where
+--   traverse :: Applicative z => (a -> z b) -> PriorityQueue a -> z (PriorityQueue b)
+--   traverse f t = FT.traverse f t
 
 ------ Functions ------
 
 empty :: PriorityQueue a
-empty = Nil
+empty = PQ Nil
 
 singleton :: Ord a => a -> PriorityQueue a
-singleton = Unit
+singleton = PQ . Unit
 
 size :: PriorityQueue a -> Int
-size = length
+size (PQ t) = measure t
 
 peekMax :: PriorityQueue a -> Maybe a
-peekMax = FT.last
+peekMax (PQ t) = FT.last t
 
 peekMin :: PriorityQueue a -> Maybe a
-peekMin = FT.head
+peekMin (PQ t) = FT.head t
 
 deleteMax :: PriorityQueue a -> PriorityQueue a
-deleteMax = removeTail
+deleteMax (PQ t) = PQ (removeTail t)
 
 deleteMin :: PriorityQueue a -> PriorityQueue a
-deleteMin = removeHead
+deleteMin (PQ t) = PQ (removeHead t)
 
 enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
-enqueue x q =
-  let (t1, t2) = split (<= x) q
-   in append (insertHead t2 x) t2
+enqueue x (PQ t) =
+  let (t1, t2) = split (<= x) t
+   in PQ (append (insertHead x t2) t2)
 
 union :: Ord a => PriorityQueue a -> PriorityQueue a -> PriorityQueue a
 union = flip enqueue

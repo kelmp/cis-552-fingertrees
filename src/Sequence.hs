@@ -6,22 +6,22 @@ module Sequence where
 import Control.Applicative
 import Control.Monad
 import Data.Foldable
-import Data.Functor
+import Data.Functor ()
 import Data.Monoid
 import Data.Semigroup
 import Data.Traversable
 import FingerTree
 
-newtype Sequence a = FingerTree a
+newtype Sequence a = Seq (FingerTree a)
 
 -- Instances --
 
-instance Monad Sequence where
-  return :: a -> Sequence a
-  return = pure
+-- instance Monad Sequence where
+--   return :: a -> Sequence a
+--   return = pure
 
-  (>>=) :: Sequence a -> (a -> Sequence b) -> Sequence b
-  t >>= f = FingerTree . (>>=)
+--   (>>=) :: Sequence a -> (a -> Sequence b) -> Sequence b
+--   (Seq t) >>= f = Seq (FingerTree . (>>=) t f)
 
 -- foldl add empty t
 --  where
@@ -29,84 +29,76 @@ instance Monad Sequence where
 
 instance Functor Sequence where
   fmap :: (a -> b) -> Sequence a -> Sequence b
-  fmap f t = FingerTree.fmap
+  fmap f (Seq t) = Seq (FingerTree.fmap' f t)
 
-instance Applicative Sequence where
-  pure :: a -> Sequence a
-  pure t = singleton
+-- instance Applicative Sequence where
+--   pure :: a -> Sequence a
+--   pure = singleton
 
-  (<*>) :: Sequence (a -> b) -> Sequence a -> Sequence b
-  t1 <*> t2 = FingerTree . (<*>)
+--   (<*>) :: Sequence (a -> b) -> Sequence a -> Sequence b
+--   (Seq t1) <*> (Seq t2) = Seq (FingerTree.(<*>) t1 t2)
 
 instance Monoid (Sequence a) where
   mempty :: Sequence a
-  mempty = empty
+  mempty = Seq Nil
 
 instance Semigroup (Sequence a) where
-  (<>) = FingerTree . (<>)
+  (Seq t1) <> (Seq t2) = Seq (FingerTree . (<>) t1 t2)
 
 instance Foldable Sequence where
   foldMap :: Monoid m => (a -> m) -> Sequence a -> m
-  foldMap f t = FingerTree.foldMap
+  foldMap f (Seq t) = Seq (FingerTree . f t)
 
-  foldr :: (a -> b -> b) -> b -> Sequence a -> b
-  foldr f b t = FingerTree.foldr f b t
-
-instance Traversable Sequence where
-  traverse :: Applicative z => (a -> z b) -> Sequence a -> z (Sequence b)
-  traverse f t = FingerTree.traverse f t
+-- instance Traversable Sequence where
+--   traverse :: Applicative z => (a -> z b) -> Sequence a -> z (Sequence b)
+--   traverse f t = FingerTree.traverse f t
 
 ------ Functions ------
 
 empty :: Sequence a
-empty = Nil
+empty = Seq Nil
 
 singleton :: a -> Sequence a
-singleton = Unit
+singleton x = Seq $ Unit x
 
 (<|) :: a -> Sequence a -> Sequence a
-(<|) = insertHead
+(<|) x (Seq t) = Seq (insertHead x t)
 
 (|>) :: Sequence a -> a -> Sequence a
-(|>) = inserTail
+(|>) (Seq t) x = Seq (insertTail x t)
 
 (><) :: Sequence a -> Sequence a -> Sequence a
-(><) = append
+(><) (Seq t1) (Seq t2) = Seq (append t1 t2)
 
-first :: Seq a -> Maybe a
-first = FingerTree.head
+first :: Sequence a -> Maybe a
+first (Seq t1) = FingerTree.head t1
 
-last :: Seq a -> Maybe a
-last = FingerTree.last
+last :: Sequence a -> Maybe a
+last (Seq t1) = FingerTree.last t1
 
-deleteLast :: Seq a -> Seq a
-deleteLast = removeTail
+deleteLast :: Sequence a -> Sequence a
+deleteLast (Seq t) = Seq (removeTail t)
 
-deleteAt :: Int -> Seq a -> Seq a
-deleteAt i seq =
-  let (t1, t2) = split i seq
+deleteAt :: Int -> Sequence a -> Sequence a
+deleteAt i (Seq t) =
+  let (t1, t2) = split i t
    in case t2 of
-        Nil -> seq
-        _ -> append t1 (removeHead t2)
+        Nil -> Seq t
+        _ -> Seq (append t1 (removeHead t2))
 
-insertAt :: Int -> a -> Seq a -> Seq a
-
-deleteAt i x seq =
-  let (t1, t2) = split i seq
-   in case t2 of
-        Nil -> seq
-        _ -> append t1 (insertHead t2 x)
+insertAt :: Int -> a -> Sequence a -> Sequence a
+insertAt = undefined
 
 fromList :: [a] -> Sequence a
-fromList = FingerTree.fromList
+fromList = Seq . FingerTree.fromList
 
 null :: Sequence a -> Bool
-null = (== Nil)
+null (Seq t) = t == Nil
 
-length :: Sequnece a -> Int
-length = FingerTree.length
+length :: Sequence a -> Int
+length = measure
 
 lookup :: Int -> Sequence a -> Maybe a
-lookup x seq =
-  let (_, t2) = split x seq
-   in if t2 /= Nil then Just FingerTree.head t2 else Nothing
+lookup x (Seq t) =
+  let (_, t2) = split x t
+   in if t2 /= Nil then FingerTree.head t2 else Nothing

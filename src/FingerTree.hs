@@ -1,6 +1,6 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module FingerTree where
@@ -206,53 +206,58 @@ tupleToSome (Triple _ a b c) = Three a b c
 more :: Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
 more l ft r = More (measure l + measure ft + measure r) l ft r
 
-instance Monad FingerTree where
-  return :: a -> FingerTree a
-  return = Unit
+-- instance Monad FingerTree where
+--   return :: a -> FingerTree a
+--   return = Unit
 
-  (>>=) :: FingerTree a -> (a -> FingerTree b) -> FingerTree b
-  Nil >>= f = Nil
-  (Unit x) >>= f = f x
-  (More n l t r) >>= f = undefined
+--   (>>=) :: FingerTree a -> (a -> FingerTree b) -> FingerTree b
+--   Nil >>= f = Nil
+--   (Unit x) >>= f = f x
+--   (More n l t r) >>= f = undefined
 
-instance Functor FingerTree where
-  fmap :: (a -> b) -> FingerTree a -> FingerTree b
-  fmap _ Nil = Nil
-  fmap f (Unit x) = Unit (f x)
-  fmap f (More _ l t r) = more (fmap f l) (fmap (fmap f) t) (fmap f r)
+-- instead of making it an instance of functor, we just make our own fmap
+-- (Or, we could potentially write a function that measures a non-meaured type)
 
-instance Functor Some where
-  fmap :: (a -> b) -> Some a -> Some b
-  fmap f (One x) = One (f x)
-  fmap f (Two x y) = Two (f x) (f y)
-  fmap f (Three x y z) = Three (f x) (f y) (f z)
+fmap' :: Measured a => Measured b => (a -> b) -> FingerTree a -> FingerTree b
+fmap' _ Nil = Nil
+fmap' f (Unit x) = Unit (f x)
+fmap' f (More _ l t r) = more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
 
-instance Functor Tuple where
-  fmap :: (a -> b) -> Tuple a -> Tuple b
-  fmap f (Pair _ x y) = Pair (measure (f x) + measure (f y)) (f x) (f y)
-  fmap f (Triple _ x y z) = triple (f x) (f y) (f z)
+fmapSome :: Measured a => Measured b => (a -> b) -> Some a -> Some b
+fmapSome f (One x) = One (f x)
+fmapSome f (Two x y) = Two (f x) (f y)
+fmapSome f (Three x y z) = Three (f x) (f y) (f z)
+
+fmapTuple :: Measured a => Measured b => (a -> b) -> Tuple a -> Tuple b
+fmapTuple f (Pair _ x y) = pair (f x) (f y)
+fmapTuple f (Triple _ x y z) = triple (f x) (f y) (f z)
+
+-- fmap is supposed to take in two measured things but, it can't
+
+-- toMeasured :: Measured c => b -> c
+-- toMeasured x = Measured x
 
 mapSome :: Some a -> (a -> b) -> Some b
 mapSome (One x) f = One (f x)
 mapSome (Two x y) f = Two (f x) (f y)
 mapSome (Three x y z) f = Three (f x) (f y) (f z)
 
-instance Applicative FingerTree where
-  pure = undefined
-  (<*>) = undefined
+-- instance Applicative FingerTree where
+--   pure = undefined
+--   (<*>) = undefined
 
-instance Applicative FingerTree where
-  pure :: a -> FingerTree a
-  pure = Unit
+-- instance Applicative FingerTree where
+--   pure :: a -> FingerTree a
+--   pure = Unit
 
-  (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
-  Nil <*> _ = Nil
-	_ <*> Nil = Nil
-	(Unit f) <*> (Unit x) = Unit (f x)
-  (Unit f) <*> (More _ _ x _) = Unit (f x)
-	(Node _ f _) <*> (Unit v) = undefined
-	(Node l f r) <*> (Node l' v r') =
-		Node (l <*> l') (f v) (r <*> r')
+--   (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
+--   Nil <*> _ = Nil
+-- 	_ <*> Nil = Nil
+-- 	(Unit f) <*> (Unit x) = Unit (f x)
+--   (Unit f) <*> (More _ _ x _) = Unit (f x)
+-- 	(Node _ f _) <*> (Unit v) = undefined
+-- 	(Node l f r) <*> (Node l' v r') =
+-- 		Node (l <*> l') (f v) (r <*> r')
 
 instance Measured a => Monoid (FingerTree a) where
   mempty :: FingerTree a
@@ -279,9 +284,9 @@ instance Foldable Some where
   foldMap f (Two x y) = f x `mappend` f y
   foldMap f (Three x y z) = f x `mappend` f y `mappend` f z
 
-instance Traversable FingerTree where
-  traverse :: Applicative z => (a -> z b) -> FingerTree a -> z (FingerTree b)
-  traverse f t = undefined -- TODO
+-- instance Traversable FingerTree where
+--   traverse :: Applicative z => (a -> z b) -> FingerTree a -> z (FingerTree b)
+--   traverse f t = undefined -- TODO
 
 ------ Functions ------
 pair :: Measured a => a -> a -> Tuple a
