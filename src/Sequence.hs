@@ -77,8 +77,8 @@ first (Seq t1) = FingerTree.head t1
 last :: Sequence a -> Maybe a
 last (Seq t1) = FingerTree.last t1
 
-deleteLast :: Sequence a -> Sequence a
-deleteLast (Seq t) = Seq (removeTail t)
+-- deleteLast :: Sequence a -> Sequence a
+-- deleteLast (Seq t) = Seq (removeTail t)
 
 deleteAt :: Measured a => Int -> Sequence a -> Sequence a
 deleteAt i (Seq t) =
