@@ -69,18 +69,8 @@ instance Measured a => Measured (FingerTree a) where
 
 instance Measured a => Measured (Some a) where
   measure (One x) = measure x
-<<<<<<< HEAD
-<<<<<<< HEAD
   measure (Two x y) = measure x + measure y
   measure (Three x y z) = measure x + measure y + measure z
-=======
-  measure (Two x _) = measure x * 2
-  measure (Three x _ _) = measure x * 3
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
-=======
-  measure (Two x _) = measure x * 2
-  measure (Three x _ _) = measure x * 3
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
 
 instance Measured (Tuple a) where
   measure (Pair l _ _) = l
@@ -161,8 +151,6 @@ ft !! i = case snd $ split i ft of
 
 -- split helpers
 -- splitTree needs deepL, deepR, and someToTree
-<<<<<<< HEAD
-<<<<<<< HEAD
 deepL :: Measured a => Maybe (Some a) -> FingerTree (Tuple a) -> Some a ->
   FingerTree a
 deepL Nothing ft r = rotL ft r
@@ -170,18 +158,6 @@ deepL (Just l) ft r = more l ft r
 
 deepR :: Measured a => Some a -> FingerTree (Tuple a) -> Maybe (Some a) ->
   FingerTree a
-=======
-=======
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
-deepL :: Measured a => Maybe (Some a) -> FingerTree (Tuple a) -> Some a -> FingerTree a
-deepL Nothing ft r = rotL ft r
-deepL (Just l) ft r = more l ft r
-
-deepR :: Measured a => Some a -> FingerTree (Tuple a) -> Maybe (Some a) -> FingerTree a
-<<<<<<< HEAD
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
-=======
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
 deepR l ft Nothing = rotR l ft
 deepR l ft (Just r) = more l ft r
 
@@ -349,7 +325,6 @@ head (More _ (Two x _) _ _) = Just x
 head (More _ (Three x _ _) _ _) = Just x
 
 -- TODO check i
-<<<<<<< HEAD
 tail :: Measured a => FingerTree a -> FingerTree a
 tail (Unit _) = Nil
 tail (More i (Three _ x y) ft r) = more (Two x y) ft r
@@ -373,20 +348,6 @@ map1 f (More _ (Three x y z) ft r) = more (Three (f x) y z) ft r
   -- (Nil, Two x y) -> Just $ more (One x) Nil (One y)
   -- (Nil, Three x y z) -> Just $ more (One x) Nil (Two y z)
   -- _ -> undefined
-=======
-tail :: FingerTree a -> Maybe (FingerTree a)
-tail (More i (Three _ x y) ft r) = Just $ More (i - 1) (Two x y) ft r
-tail (More i (Two _ x) ft r) = Just $ More (i - 1) (One x) ft r
-tail (More i (One _) ft r) = case (ft, r) of
-  (Nil, One x) -> Just $ Unit x
-  (Nil, Two x y) -> Just $ More (i - 1) (One x) Nil (One y)
-  (Nil, Three x y z) -> Just $ More (i - 1) (One x) Nil (Two y z)
-  _ -> undefined
-tail _ = Nothing
-<<<<<<< HEAD
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
-=======
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
 
 -- case FingerTree.head ft of
 --   Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
