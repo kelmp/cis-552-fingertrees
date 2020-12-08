@@ -365,6 +365,7 @@ glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) =
 someToList :: Some a -> [a]
 someToList (One x) = [x]
 someToList (Two x y) = [x, y]
+someToList (Three x y z) = [x, y, z]
 
 listToTuples :: Measured a => [a] -> [Tuple a]
 listToTuples [] = []
@@ -378,8 +379,8 @@ concat l = undefined
 -- TODO: Figure out what to do if this contains tuples
 toList :: FingerTree a -> [a]
 toList Nil = []
-toList (Unit x) = undefined
-toList (More _ l ft r) = undefined
+toList (Unit x) = [x]
+toList (More _ l ft r) = someToList l ++ foldr (\x acc -> tupleToList x ++ acc) [] (toList ft) ++ someToList r
 
 fromList :: Measured a => [a] -> FingerTree a
 fromList = foldr insertHead Nil

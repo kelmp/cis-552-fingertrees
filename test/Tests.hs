@@ -135,6 +135,14 @@ tInsertHead =
           (One 1)
     ]
 
+tTail :: Test
+tTail =
+  TestList []
+
+tConcat :: Test
+tConcat =
+  TestList []
+
 tInsertTail :: Test
 tInsertTail =
   TestList
@@ -198,20 +206,10 @@ tIsEmpty =
         ~?= False
     ]
 
-tTail :: Test
-tTail =
-  TestList
-    []
-
-tAppend :: Test
-tAppend =
-  TestList
-    []
-
-tConcat :: Test
-tConcat =
-  TestList
-    []
+-- tConcat :: Test
+-- tConcat =
+--   TestList
+--     []
 
 -- "Concat two empty" ~: undefined,
 -- "Concat first empty" ~: undefined,
@@ -292,7 +290,7 @@ tFromList :: Test
 tFromList =
   TestList
     [ "fromList empty" ~: ftEmpty ~?= FingerTree.fromList [],
-      "fromList 1" ~: FingerTree.toList ft1 ~?= toList (FingerTree.fromList [1]),
+      "fromList 1" ~: ft1 ~?= FingerTree.fromList [1],
       "fromList 2" ~: FingerTree.toList ft2 ~?= toList (FingerTree.fromList [1, 2]),
       "fromList 3" ~: FingerTree.toList ft3 ~?= toList (FingerTree.fromList [1, 2, 3]),
       "fromList 4" ~: FingerTree.toList ft4 ~?= toList (FingerTree.fromList [1, 2, 3, 4]),
