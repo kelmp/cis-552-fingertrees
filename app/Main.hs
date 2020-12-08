@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-=======
->>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
 {-# LANGUAGE DefaultSignatures #-}
 
 module Main where
