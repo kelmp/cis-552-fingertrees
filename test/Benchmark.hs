@@ -2,7 +2,7 @@ module Benchmark where
 
 import Data.FingerTree as FTlib ()
 import Data.List as List ()
-import FingerTree as FT ()
+import FingerTree as FT
 
 arbitraryIntVectorsN :: Int -> IO ([Int], [Int])
 arbitraryIntVectorsN n = do
@@ -10,7 +10,7 @@ arbitraryIntVectorsN n = do
   ys <- arbitraryIntVectorOf n
   return (xs, ys)
 
-arbFTreesAndLists :: Int -> IO ([FingerTree Int], [[Int]])
+arbFTreesAndLists :: Int -> IO ([FT.FingerTree Int], [[Int]])
 arbFTreesAndLists len nTrees nLists = do
   fTrees <-
     [ ft | ft <- FT.fromList $ arbitraryIntVectorOf len, i <- [1 .. nTrees]

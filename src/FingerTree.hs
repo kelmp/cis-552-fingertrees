@@ -60,15 +60,17 @@ class Measured a where
   default measure :: a -> Int
   measure _ = 1
 
+instance Measured Int
+
 instance Measured a => Measured (FingerTree a) where
   measure Nil = 0
   measure (Unit x) = measure x
   measure (More l _ _ _) = l
 
-instance Measured (Some a) where
-  measure One {} = 1
-  measure Two {} = 2
-  measure Three {} = 3
+instance Measured a => Measured (Some a) where
+  measure (One x) = measure x
+  measure (Two x _) = measure x * 2
+  measure (Three x _ _) = measure x * 3
 
 instance Measured (Tuple a) where
   measure (Pair l _ _) = l
@@ -110,7 +112,7 @@ splitTuple tgtI (Triple _ x y z)
 -- other cases. This could be combined with "split" to avoid the error case,
 -- but in the interest of sticking to the paper, it's like this for now.
 -- This is a helper for split.
-splitTree :: Int -> FingerTree a -> Split (FingerTree a) a
+splitTree :: Measured a => Int -> FingerTree a -> Split (FingerTree a) a
 splitTree _ Nil =
   error
     "Cannot call splitTree on empty FingerTree due to \
@@ -149,15 +151,15 @@ ft !! i = case snd $ split i ft of
 
 -- split helpers
 -- splitTree needs deepL, deepR, and someToTree
-deepL :: Maybe (Some a) -> FingerTree (Tuple a) -> Some a -> FingerTree a
+deepL :: Measured a => Maybe (Some a) -> FingerTree (Tuple a) -> Some a -> FingerTree a
 deepL Nothing ft r = rotL ft r
 deepL (Just l) ft r = more l ft r
 
-deepR :: Some a -> FingerTree (Tuple a) -> Maybe (Some a) -> FingerTree a
+deepR :: Measured a => Some a -> FingerTree (Tuple a) -> Maybe (Some a) -> FingerTree a
 deepR l ft Nothing = rotR l ft
 deepR l ft (Just r) = more l ft r
 
-someToTree :: Some a -> FingerTree a
+someToTree :: Measured a => Some a -> FingerTree a
 someToTree (One a) = Unit a
 someToTree (Two a b) = more (One a) Nil (One b)
 someToTree (Three a b c) = more (One a) Nil (Two b c)
@@ -166,7 +168,7 @@ someToTree (Three a b c) = more (One a) Nil (Two b c)
 
 -- Inputs represent a FingerTree with missing left branch; shift middle to
 -- left by 1 (if possible) to construct valid FingerTree
-rotL :: FingerTree (Tuple a) -> Some a -> FingerTree a
+rotL :: Measured a => FingerTree (Tuple a) -> Some a -> FingerTree a
 rotL ft r = case ft of
   Nil -> someToTree r
   Unit x -> more (tupleToSome x) Nil r
@@ -176,7 +178,7 @@ rotL ft r = case ft of
     (h, Just t) -> more (tupleToSome h) (more t ft' ir) r
 
 -- Similar to rotL, but there's no right branch (so rotate to right by 1)
-rotR :: Some a -> FingerTree (Tuple a) -> FingerTree a
+rotR :: Measured a => Some a -> FingerTree (Tuple a) -> FingerTree a
 rotR l ft = case ft of
   Nil -> someToTree l
   Unit x -> more l Nil (tupleToSome x)
@@ -203,7 +205,7 @@ tupleToSome :: Tuple a -> Some a
 tupleToSome (Pair _ a b) = Two a b
 tupleToSome (Triple _ a b c) = Three a b c
 
-more :: Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
+more :: Measured a => Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
 more l ft r = More (measure l + measure ft + measure r) l ft r
 
 -- instance Monad FingerTree where
@@ -329,6 +331,7 @@ tail (More i (One _) ft r) = case (ft, r) of
   (Nil, Two x y) -> Just $ More (i - 1) (One x) Nil (One y)
   (Nil, Three x y z) -> Just $ More (i - 1) (One x) Nil (Two y z)
   _ -> undefined
+tail _ = Nothing
 
 -- case FingerTree.head ft of
 --   Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
@@ -420,14 +423,14 @@ someToTreeList :: Some a -> [FingerTree a]
 someToTreeList (One x) = [Unit x]
 someToTreeList (Two x y) = [Unit x, Unit y, More 2 (One x) Nil (One y)]
 
-ft1 :: FingerTree Int
-ft1 = Unit 1
+-- ft1 :: FingerTree Int
+-- ft1 = Unit 1
 
-ft2 :: FingerTree Int
-ft2 = More 2 (One 1) Nil (One 2)
+-- ft2 :: FingerTree Int
+-- ft2 = More 2 (One 1) Nil (One 2)
 
-ft3 :: FingerTree Int
-ft3 = More 3 (One 1) Nil (Two 2 3)
+-- ft3 :: FingerTree Int
+-- ft3 = More 3 (One 1) Nil (Two 2 3)
 
-ft4 :: FingerTree Int
-ft4 = More 4 (One 1) Nil (Three 2 3 4)
+-- ft4 :: FingerTree Int
+-- ft4 = More 4 (One 1) Nil (Three 2 3 4)
