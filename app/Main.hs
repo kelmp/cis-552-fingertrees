@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+=======
+>>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
 {-# LANGUAGE DefaultSignatures #-}
 
 module Main where
@@ -78,6 +81,67 @@ instance Measured String where
 --       "friendly"
 --     ]
 
+<<<<<<< HEAD
+=======
+-- newtype Person = Person
+--   { name :: String,
+--     adj :: String,
+--     memberFor :: String
+--   }
+
+-- durTree :: FingerTree String
+-- durTree =
+--   FT.fromList
+--     [ "seconds",
+--       "minutes",
+--       "hours",
+--       "days",
+--       "weeks",
+--       "months",
+--       "years",
+--       "decades",
+--       "centuries",
+--       "millenia"
+--     ]
+
+-- nameTree :: FingerTree String
+-- nameTree =
+--   FT.fromList
+--     [ "Alice",
+--       "Bob",
+--       "Carol",
+--       "Dave",
+--       "Eve",
+--       "Frank",
+--       "Grace",
+--       "Heidi",
+--       "Ivan",
+--       "Judy",
+--       "Mallory",
+--       "Oscar",
+--       "Peggy",
+--       "Rupert",
+--       "Sybil",
+--       "Ted",
+--       "Victor",
+--       "Walter",
+--       "Wendy",
+--       "Adrian",
+--       "Yoni"
+--     ]
+
+-- adjTree :: FingerTree String
+-- adjTree =
+--   FT.fromList
+--     [ "loyal",
+--       "satisfied",
+--       "happy",
+--       "star",
+--       "aggressively nice",
+--       "friendly"
+--     ]
+
+>>>>>>> 2e4246c0a603aa179f49874443d1b6a62b208d30
 -- newPerson :: IO Person
 -- newPerson = do
 --   nameI <- randomRIO (0, length nameTree - 1)
