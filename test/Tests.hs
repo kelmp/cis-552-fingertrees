@@ -334,6 +334,9 @@ tLength =
 
 -- (1) PostCondition Properties
 
+qcPostConditions :: IO ()
+qcPostConditions = qc1 >> qc2 >> qc3 >> qc4 >> qc5 >> qc6 >> qc7
+
 -- a. insertHead
 prop_insertHeadHead :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
 prop_insertHeadHead t x =
@@ -390,7 +393,7 @@ prop_split :: FingerTree.Measured a => Eq a => Int -> FingerTree.FingerTree a ->
 prop_split x t =
   let (t1, t2) = FingerTree.split x t
    in FingerTree.head t == FingerTree.head t1
-        && FingerTree.last t1 == FingerTree.last t2
+        && FingerTree.last t == FingerTree.last t2
 
 -- i. concat
 -- prop_concat :: Eq a => [FingerTree.FingerTree a] -> Bool
@@ -408,6 +411,27 @@ prop_split x t =
 
 -- m. length
 -- no post-conditions
+
+qc1 :: IO ()
+qc1 = quickCheck (prop_insertHeadHead :: FingerTree.FingerTree Int -> Int -> Bool)
+
+qc2 :: IO ()
+qc2  = quickCheck (prop_insertHeadFirst :: FingerTree.FingerTree Int -> Int -> Bool)
+
+qc3 :: IO ()
+qc3  = quickCheck (prop_insertTailTail :: FingerTree.FingerTree Int -> Int -> Bool)
+
+qc4 :: IO ()
+qc4  = quickCheck (prop_insertTailLast :: FingerTree.FingerTree Int -> Int -> Bool)
+
+qc5 :: IO ()
+qc5  = quickCheck (prop_removeTailChanged :: FingerTree.FingerTree Int -> Bool)
+
+qc6 :: IO ()
+qc6  = quickCheck (prop_append :: FingerTree.FingerTree Int -> FingerTree.FingerTree Int -> Bool)
+
+qc7 :: IO ()
+qc7  = quickCheck (prop_split :: Int -> FingerTree.FingerTree Int -> Bool)
 
 -- (2) Metamorphic Properties (Bulk of the testing):
 
@@ -493,6 +517,13 @@ prop_modelFromListEveryElementAppend l1 l2 =
   let myTree = append (FingerTree.fromList l1) (FingerTree.fromList l2)
    in let modelTree = l1 ++ l2
        in toList myTree == modelTree
+
+-- ADDED THIS STUFF:
+prop_modelSplit :: FingerTree.Measured a => Eq a => Int -> [a] -> Bool
+prop_modelSplit x l = 
+  let t = FingerTree.fromList l in
+    let (t1, t2) = FingerTree.split x t  in
+      toList t1 == take x l && toList t2 == drop x l
 
 -- TODO: want a model based quick check property for split
 
@@ -610,3 +641,16 @@ qcFingerTree = putStrLn "I am in Missouri"
 -- >> qc10
 -- >> qc11
 -- >> qc12
+
+
+-- Added this:
+prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
+prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
+  t == append t1 t2
+
+-- -- ADDED THIS STUFF:
+-- prop_modelSplit :: FingerTree.Measured a => Eq a => Int -> [a] -> Bool
+-- prop_modelSplit x l = 
+--   let t = FingerTree.fromList l in
+--     let (t1, t2) = FingerTree.split x t  in
+--       toList t1 == take x l && toList t2 == drop x l
