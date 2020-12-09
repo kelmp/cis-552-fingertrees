@@ -71,6 +71,9 @@ data Tuple a
   | Triple Int a a a
   deriving (Eq, Show)
 
+--------------
+-- Measured --
+--------------
 -- Allows for O(1) retrieval of length via cached values
 class Measured a where
   measure :: a -> Int
@@ -93,6 +96,9 @@ instance Measured (Tuple a) where
   measure (Pair l _ _) = l
   measure (Triple l _ _ _) = l
 
+----------------------
+-- Queue operations --
+----------------------
 insertHead :: Measured a => a -> FingerTree a -> FingerTree a
 insertHead a Nil = Unit a
 insertHead a (Unit b) = more (One a) Nil (One b)
@@ -123,6 +129,9 @@ last (More _ _ _ (One x)) = Just x
 last (More _ _ _ (Two _ x)) = Just x
 last (More _ _ _ (Three _ _ x)) = Just x
 
+------------------------
+-- Smart constructors --
+------------------------
 more :: Measured a => Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
 more l ft r = More (measure l + measure ft + measure r) l ft r
 
@@ -132,9 +141,18 @@ pair a b = Pair (measure a + measure b) a b
 triple :: Measured a => a -> a -> a -> Tuple a
 triple a b c = Triple (measure a + measure b + measure c) a b c
 
+-----------
+-- Split --
+-----------
 -- Type returned by the split function and some of its helpers.
 data Split o a = Split o a o
   deriving (Eq, Show)
+
+(!!) :: Measured a => FingerTree a -> Int -> Maybe a
+ft !! i = case snd $ split i ft of
+  Nil -> Nothing
+  Unit x -> Just x
+  More _ l _ _ -> Just $ snd $ someSeparateLast l
 
 -- Splits a FingerTree into two separate trees based on index.
 split :: Measured a => Int -> FingerTree a -> (FingerTree a, FingerTree a)
@@ -201,12 +219,6 @@ splitThreeOrTriple tgtI x y z
   | tgtI < measure x + measure y =
       Split (Just (One x)) y (Just (One z))             -- (x, y z)
   | otherwise = Split (Just (Two x y)) z Nothing        -- (x y, z)
-
-(!!) :: Measured a => FingerTree a -> Int -> Maybe a
-ft !! i = case snd $ split i ft of
-  Nil -> Nothing
-  Unit x -> Just x
-  More _ l _ _ -> Just $ snd $ someSeparateLast l
 
 -- split helpers
 -- splitTree needs deepL, deepR, and someToTree
