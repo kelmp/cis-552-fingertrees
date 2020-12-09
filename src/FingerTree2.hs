@@ -1,9 +1,4 @@
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 
 module FingerTree2 where
 
@@ -237,6 +232,10 @@ tupleToSome :: Tuple c a -> Some a
 tupleToSome (Pair _ a b) = Two a b
 tupleToSome (Triple _ a b c) = Three a b c
 
+---------------
+-- Insertion --
+---------------
+-- Insertion to head and tail are both O(1)
 insertHead :: Measured c a => a -> FingerTree c a -> FingerTree c a
 insertHead a Nil = Unit a
 insertHead a (Unit b) = more (One a) Nil (One b)
@@ -245,6 +244,35 @@ insertHead a (More _ (Two b c) ft r) = more (Three a b c) ft r
 insertHead a (More _ (Three b c d) ft r) =
   more (Two a b) (insertHead (pair c d) ft) r
 
--- Other functions
+insertTail :: Measured c a => a -> FingerTree c a -> FingerTree c a
+insertTail z Nil = Unit z
+insertTail z (Unit a) = more (One a) Nil (One z)
+insertTail z (More _ l ft (One a)) = more l ft (Two a z)
+insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
+insertTail z (More _ l ft (Three a b c)) =
+  more l (insertTail (pair a b) ft) (Two c z)
+
+-- Combining trees --
 append :: Measured c a => FingerTree c a -> FingerTree c a -> FingerTree c a
-append = undefined
+append t1 = glue t1 []
+
+-- Append helpers
+glue :: Measured c a =>
+  FingerTree c a -> [a] -> FingerTree c a -> FingerTree c a
+glue Nil l t2 = foldr insertHead t2 l
+glue t1 l Nil = foldl (flip insertTail) t1 l
+glue (Unit x) l t2 = foldr insertHead t2 (x : l)
+glue t1 l (Unit y) = foldl (flip insertTail) t1 (l ++ [y])
+glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) =
+  More i1 x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
+
+someToList :: Some a -> [a]
+someToList (One x) = [x]
+someToList (Two x y) = [x, y]
+someToList (Three x y z) = [x, y, z]
+
+listToTuples :: Measured c a => [a] -> [Tuple c a]
+listToTuples [] = []
+listToTuples [x, y] = [pair x y]
+listToTuples [x, y, z, w] = [pair x y, pair z w]
+listToTuples (x : y : z : xs) = triple x y z : listToTuples xs
