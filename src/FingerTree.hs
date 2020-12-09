@@ -36,13 +36,18 @@ import Data.Functor ()
 import Data.Monoid ()
 import Data.Semigroup ()
 import Data.Traversable ()
-import Test.HUnit
+import Test.HUnit ()
 import Test.QuickCheck
 import Prelude hiding ((!!))
--- (Arbitrary (arbitrary, shrink))
 
 default (Int)
 
+----------------
+-- DATA TYPES --
+----------------
+----------------
+-- FingerTree --
+----------------
 -- FingerTree is empty, a single element, or has elements on both sides
 -- w/ a Tuple FingerTree in the middle. Nested type has cached length
 data FingerTree a
@@ -88,48 +93,58 @@ instance Measured (Tuple a) where
   measure (Pair l _ _) = l
   measure (Triple l _ _ _) = l
 
+insertHead :: Measured a => a -> FingerTree a -> FingerTree a
+insertHead a Nil = Unit a
+insertHead a (Unit b) = more (One a) Nil (One b)
+insertHead a (More _ (One b) ft r) = more (Two a b) ft r
+insertHead a (More _ (Two b c) ft r) = more (Three a b c) ft r
+insertHead a (More _ (Three b c d) ft r) =
+  more (Two a b) (insertHead (pair c d) ft) r
+
+insertTail :: Measured a => a -> FingerTree a -> FingerTree a
+insertTail z Nil = Unit z
+insertTail z (Unit a) = more (One a) Nil (One z)
+insertTail z (More _ l ft (One a)) = more l ft (Two a z)
+insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
+insertTail z (More _ l ft (Three a b c)) =
+  more l (insertTail (pair a b) ft) (Two c z)
+
+head :: FingerTree a -> Maybe a
+head Nil = Nothing
+head (Unit x) = Just x
+head (More _ (One x) _ _) = Just x
+head (More _ (Two x _) _ _) = Just x
+head (More _ (Three x _ _) _ _) = Just x
+
+last :: FingerTree a -> Maybe a
+last Nil = Nothing
+last (Unit x) = Just x
+last (More _ _ _ (One x)) = Just x
+last (More _ _ _ (Two _ x)) = Just x
+last (More _ _ _ (Three _ _ x)) = Just x
+
+more :: Measured a => Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
+more l ft r = More (measure l + measure ft + measure r) l ft r
+
+pair :: Measured a => a -> a -> Tuple a
+pair a b = Pair (measure a + measure b) a b
+
+triple :: Measured a => a -> a -> a -> Tuple a
+triple a b c = Triple (measure a + measure b + measure c) a b c
+
 -- Type returned by the split function and some of its helpers.
 data Split o a = Split o a o
   deriving (Eq, Show)
 
--- Splits a Some based on relative index. Returns Split with Some on the
--- outsides (wrapped in Maybe in case there aren't enough elements)
--- to build the outsides of FingerTrees post-split.
--- This is a helper for splitTree
-splitSome :: Measured a => Int -> Some a -> Split (Maybe (Some a)) a
-splitSome _ (One x) = Split Nothing x Nothing
-splitSome tgtI (Two x y)
-  | tgtI < measure x = Split Nothing x (Just (One y))
-  | otherwise = Split (Just (One x)) y Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y Nothing
-  -- | otherwise = Split Nothing x (Just (One y))
-splitSome tgtI (Three x y z)
-  | tgtI < measure x = Split Nothing x (Just (Two y z))
-  | tgtI < measure x + measure y =
-      Split (Just (One x)) y (Just (One z))
-  | otherwise = Split (Just (Two x y)) z Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y (Just (One z))
-  -- | tgtI == 2 = Split (Just (Two x y)) z Nothing
-  -- | otherwise = Split Nothing x (Just (Two y z))
-
--- Splits a Tuple based on relative index. Returns Some on the outside
--- of the Split type (if possible) since the results are used for the
--- outer branches of new More type FingerTrees.
--- This is a helper for splitTree.
-splitTuple :: Measured a => Int -> Tuple a -> Split (Maybe (Some a)) a
-splitTuple tgtI (Pair _ x y)
-  | tgtI < measure x = Split Nothing x (Just (One y))
-  | otherwise = Split (Just (One x)) y Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y Nothing
-  -- | otherwise = Split Nothing x (Just (One y))
-splitTuple tgtI (Triple _ x y z)
-  | tgtI < measure x = Split Nothing x (Just (Two y z))
-  | tgtI < measure x + measure y =
-      Split (Just (One x)) y (Just (One z))
-  | otherwise = Split (Just (Two x y)) z Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y (Just (One z))
-  -- | tgtI == 2 = Split (Just (Two x y)) z Nothing
-  -- | otherwise = Split Nothing x (Just (Two y z))
+-- Splits a FingerTree into two separate trees based on index.
+split :: Measured a => Int -> FingerTree a -> (FingerTree a, FingerTree a)
+split _ Nil = (Nil, Nil)
+split i ft =
+  if i >= 0 && i < measure ft
+    then
+      let Split l x r = splitTree i ft
+       in (l, insertHead x r)
+    else (ft, Nil)
 
 -- Split a tree, if possible. Because of the Split datatype requiring an
 -- element in the middle, it's not possible for Nil but will work in all
@@ -157,15 +172,47 @@ splitTree tgtI (More _ l ft r)
     startMiddle = measure l
     startRight = startMiddle + measure ft
 
--- Splits a FingerTree into two separate trees based on index.
-split :: Measured a => Int -> FingerTree a -> (FingerTree a, FingerTree a)
-split _ Nil = (Nil, Nil)
-split i ft =
-  if i >= 0 && i < measure ft
-    then
-      let Split l x r = splitTree i ft
-       in (l, insertHead x r)
-    else (ft, Nil)
+-- Splits a Some based on relative index. Returns Split with Some on the
+-- outsides (wrapped in Maybe in case there aren't enough elements)
+-- to build the outsides of FingerTrees post-split.
+-- This is a helper for splitTree
+splitSome :: Measured a => Int -> Some a -> Split (Maybe (Some a)) a
+splitSome _ (One x) = Split Nothing x Nothing
+splitSome tgtI (Two x y) = splitTwoOrPair tgtI x y
+  -- | tgtI < measure x = Split Nothing x (Just (One y))
+  -- | otherwise = Split (Just (One x)) y Nothing
+splitSome tgtI (Three x y z) = splitThreeOrTriple tgtI x y z
+  -- | tgtI < measure x = Split Nothing x (Just (Two y z))
+  -- | tgtI < measure x + measure y =
+  --     Split (Just (One x)) y (Just (One z))
+  -- | otherwise = Split (Just (Two x y)) z Nothing
+
+-- Splits a Tuple based on relative index. Returns Some on the outside
+-- of the Split type (if possible) since the results are used for the
+-- outer branches of new More type FingerTrees.
+-- This is a helper for splitTree.
+splitTuple :: Measured a => Int -> Tuple a -> Split (Maybe (Some a)) a
+splitTuple tgtI (Pair _ x y) = splitTwoOrPair tgtI x y
+  -- | tgtI < measure x = Split Nothing x (Just (One y))
+  -- | otherwise = Split (Just (One x)) y Nothing
+splitTuple tgtI (Triple _ x y z) = splitThreeOrTriple tgtI x y z
+  -- | tgtI < measure x = Split Nothing x (Just (Two y z))
+  -- | tgtI < measure x + measure y =
+  --     Split (Just (One x)) y (Just (One z))
+  -- | otherwise = Split (Just (Two x y)) z Nothing
+
+splitTwoOrPair :: Measured a => Int -> a -> a -> Split (Maybe (Some a)) a
+splitTwoOrPair tgtI x y
+  | tgtI < measure x = Split Nothing x (Just (One y)) -- ((), x y)
+  | otherwise = Split (Just (One x)) y Nothing        -- (x, y)
+
+splitThreeOrTriple :: Measured a =>
+  Int -> a -> a -> a -> Split (Maybe (Some a)) a
+splitThreeOrTriple tgtI x y z
+  | tgtI < measure x = Split Nothing x (Just (Two y z)) -- ((), x y z)
+  | tgtI < measure x + measure y =
+      Split (Just (One x)) y (Just (One z))             -- (x, y z)
+  | otherwise = Split (Just (Two x y)) z Nothing        -- (x y, z)
 
 (!!) :: Measured a => FingerTree a -> Int -> Maybe a
 ft !! i = case snd $ split i ft of
@@ -230,9 +277,6 @@ someSeparateLast (Three x y z) = (Just (Two x y), z)
 tupleToSome :: Tuple a -> Some a
 tupleToSome (Pair _ a b) = Two a b
 tupleToSome (Triple _ a b c) = Three a b c
-
-more :: Measured a => Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
-more l ft r = More (measure l + measure ft + measure r) l ft r
 
 -- instance Monad FingerTree where
 --   return :: a -> FingerTree a
@@ -317,36 +361,6 @@ instance Foldable Some where
 --   traverse f t = undefined -- TODO
 
 ------ Functions ------
-pair :: Measured a => a -> a -> Tuple a
-pair a b = Pair (measure a + measure b) a b
-
-triple :: Measured a => a -> a -> a -> Tuple a
-triple a b c = Triple (measure a + measure b + measure c) a b c
-
--- TODO check i is updated correctly
-insertHead :: Measured a => a -> FingerTree a -> FingerTree a
-insertHead a Nil = Unit a
-insertHead a (Unit b) = more (One a) Nil (One b)
-insertHead a (More _ (One b) ft r) = more (Two a b) ft r
-insertHead a (More _ (Two b c) ft r) = more (Three a b c) ft r
-insertHead a (More _ (Three b c d) ft r) =
-  more (Two a b) (insertHead (pair c d) ft) r
-
--- TODO check i is updated correctly
-insertTail :: Measured a => a -> FingerTree a -> FingerTree a
-insertTail z Nil = Unit z
-insertTail z (Unit a) = more (One a) Nil (One z)
-insertTail z (More _ l ft (One a)) = more l ft (Two a z)
-insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
-insertTail z (More _ l ft (Three a b c)) =
-  more l (insertTail (pair a b) ft) (Two c z)
-
-head :: FingerTree a -> Maybe a
-head Nil = Nothing
-head (Unit x) = Just x
-head (More _ (One x) _ _) = Just x
-head (More _ (Two x _) _ _) = Just x
-head (More _ (Three x _ _) _ _) = Just x
 
 -- TODO check i
 tail :: Measured a => FingerTree a -> FingerTree a
@@ -375,13 +389,6 @@ map1 f (More _ (Three x y z) ft r) = more (Three (f x) y z) ft r
 
 -- case FingerTree.head ft of
 --   Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
-
-last :: FingerTree a -> Maybe a
-last Nil = Nothing
-last (Unit x) = Just x
-last (More _ _ _ (One x)) = Just x
-last (More _ _ _ (Two _ x)) = Just x
-last (More _ _ _ (Three _ _ x)) = Just x
 
 removeLast :: Measured a => FingerTree a -> FingerTree a
 removeLast (Unit _) = Nil
