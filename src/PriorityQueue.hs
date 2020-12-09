@@ -82,7 +82,7 @@ peekMin :: Measured a => PriorityQueue a -> Maybe a
 peekMin (PQ t) = FT.head t
 
 deleteMax :: Measured a => PriorityQueue a -> PriorityQueue a
-deleteMax (PQ t) = PQ (removeTail t)
+deleteMax (PQ t) = PQ (removeLast t)
 
 deleteMin :: Measured a => PriorityQueue a -> PriorityQueue a
 deleteMin (PQ t) = PQ $ FT.tail t
