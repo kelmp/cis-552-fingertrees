@@ -134,13 +134,13 @@ complain p =
     ++ ", but that's going to change if they can't speak \
        \to a manager RIGHT NOW."
 
-getNonNegInt :: IO Int
-getNonNegInt = do
+getPosInt :: IO Int
+getPosInt = do
   input <- getLine
   -- maybe getInt return (readMaybe input :: Maybe Int)
   case (readMaybe input :: Maybe Int) of
-    Nothing -> getNonNegInt
-    Just x -> if x >= 0 then return x else getNonNegInt
+    Nothing -> getPosInt
+    Just x -> if x > 0 then return x else getPosInt
 
 getIntBounded :: Int -> Int -> IO Int
 getIntBounded lo hi = do
@@ -180,8 +180,9 @@ main :: IO ()
 main = do
   putStrLn
     "Welcome to Not-Disney Not-Land-Or-World! How many people have \
-    \rushed into the renowned Cosmos-Themed Landform Ride as soon as it opened?"
-  startSize <- getNonNegInt
+    \rushed into the renowned Cosmos-Themed Landform Ride as soon as it \
+    \opened? (At least 1)"
+  startSize <- getPosInt
   queue <- addPeople startSize Nil
   queueLoop queue
 
