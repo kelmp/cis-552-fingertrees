@@ -1,25 +1,33 @@
 {-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 
-module FingerTree where
-
---   ( FingerTree (..),
---     insertHead,
---     insertTail,
---     FingerTree.head,
---     FingerTree.tail,
---     isEmpty,
---     append,
---     split,
---     toList,
---     fromList,
---     removeTail,
---     FingerTree.concat,
---     FingerTree.length,
---     FingerTree.last,
---   )
+module FingerTree 
+  ( FingerTree (..),
+    Some (..),
+    Tuple (..),
+    Split (..),
+    split,
+    splitTree,
+    splitSome,
+    splitTuple,
+    (!!),
+    more,
+    pair,
+    triple,
+    Measured,
+    measure,
+    insertHead,
+    insertTail,
+    FingerTree.head,
+    FingerTree.tail,
+    isEmpty,
+    append,
+    toList,
+    fromList,
+    removeLast,
+    FingerTree.concat,
+    FingerTree.last) where
 
 import Control.Applicative ()
 import Control.Monad
@@ -29,8 +37,11 @@ import Data.Monoid ()
 import Data.Semigroup ()
 import Data.Traversable ()
 import Test.HUnit
-import Test.QuickCheck 
+import Test.QuickCheck
+import Prelude hiding ((!!))
 -- (Arbitrary (arbitrary, shrink))
+
+default (Int)
 
 -- FingerTree is empty, a single element, or has elements on both sides
 -- w/ a Tuple FingerTree in the middle. Nested type has cached length
@@ -340,9 +351,9 @@ head (More _ (Three x _ _) _ _) = Just x
 -- TODO check i
 tail :: Measured a => FingerTree a -> FingerTree a
 tail (Unit _) = Nil
-tail (More i (Three _ x y) ft r) = more (Two x y) ft r
-tail (More i (Two _ x) ft r) = more (One x) ft r
-tail (More i (One _) ft r) = case FingerTree.head ft of
+tail (More _ (Three _ x y) ft r) = more (Two x y) ft r
+tail (More _ (Two _ x) ft r) = more (One x) ft r
+tail (More _ (One _) ft r) = case FingerTree.head ft of
   -- ft is Nil
   Nothing -> someToTree r
   -- ft is not Nil
@@ -372,16 +383,16 @@ last (More _ _ _ (One x)) = Just x
 last (More _ _ _ (Two _ x)) = Just x
 last (More _ _ _ (Three _ _ x)) = Just x
 
-removeTail :: Measured a => FingerTree a -> FingerTree a
-removeTail (Unit _) = Nil
-removeTail (More _ l ft (Three x y _)) = more l ft (Two x y)
-removeTail (More _ l ft (Two x _)) = more l ft (One x)
-removeTail (More _ l ft (One _)) = case FingerTree.last ft of
-    -- ft is Nil
+removeLast :: Measured a => FingerTree a -> FingerTree a
+removeLast (Unit _) = Nil
+removeLast (More _ l ft (Three x y _)) = more l ft (Two x y)
+removeLast (More _ l ft (Two x _)) = more l ft (One x)
+removeLast (More _ l ft (One _)) = case FingerTree.last ft of
+  -- ft is Nil
   Nothing -> someToTree l
   -- ft is not Nil
-  Just (Pair _ x y) -> more l (removeTail ft) (Two x y)
-  Just (Triple _ x y z) -> more l (removeTail ft) (Three x y z)
+  Just (Pair _ x y) -> more l (removeLast ft) (Two x y)
+  Just (Triple _ x y z) -> more l (removeLast ft) (Three x y z)
   
 
 isEmpty :: FingerTree a -> Bool
