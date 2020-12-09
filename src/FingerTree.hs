@@ -179,13 +179,7 @@ splitTree tgtI (More _ l ft r)
 splitSome :: Measured a => Int -> Some a -> Split (Maybe (Some a)) a
 splitSome _ (One x) = Split Nothing x Nothing
 splitSome tgtI (Two x y) = splitTwoOrPair tgtI x y
-  -- | tgtI < measure x = Split Nothing x (Just (One y))
-  -- | otherwise = Split (Just (One x)) y Nothing
 splitSome tgtI (Three x y z) = splitThreeOrTriple tgtI x y z
-  -- | tgtI < measure x = Split Nothing x (Just (Two y z))
-  -- | tgtI < measure x + measure y =
-  --     Split (Just (One x)) y (Just (One z))
-  -- | otherwise = Split (Just (Two x y)) z Nothing
 
 -- Splits a Tuple based on relative index. Returns Some on the outside
 -- of the Split type (if possible) since the results are used for the
@@ -193,13 +187,7 @@ splitSome tgtI (Three x y z) = splitThreeOrTriple tgtI x y z
 -- This is a helper for splitTree.
 splitTuple :: Measured a => Int -> Tuple a -> Split (Maybe (Some a)) a
 splitTuple tgtI (Pair _ x y) = splitTwoOrPair tgtI x y
-  -- | tgtI < measure x = Split Nothing x (Just (One y))
-  -- | otherwise = Split (Just (One x)) y Nothing
 splitTuple tgtI (Triple _ x y z) = splitThreeOrTriple tgtI x y z
-  -- | tgtI < measure x = Split Nothing x (Just (Two y z))
-  -- | tgtI < measure x + measure y =
-  --     Split (Just (One x)) y (Just (One z))
-  -- | otherwise = Split (Just (Two x y)) z Nothing
 
 splitTwoOrPair :: Measured a => Int -> a -> a -> Split (Maybe (Some a)) a
 splitTwoOrPair tgtI x y
