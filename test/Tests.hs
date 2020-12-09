@@ -1,9 +1,4 @@
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 
 import Data.FingerTree as FT
 import Data.Maybe as Maybe
@@ -17,13 +12,15 @@ import FingerTree
 --   insertTail,
 --   isEmpty,
 --   last,
---   removeTail,
+--   removeLast,
 --   split,
 --   tail,
 --   toList,
 -- )
 import Test.HUnit
 import Test.QuickCheck
+
+default (Int)
 
 main :: IO ()
 main = testAll
@@ -47,6 +44,8 @@ allHUnit = do
             tTail,
             tIsEmpty,
             tConcat,
+            tSplitSome,
+            tSplitTree,
             tSplit
             -- tMap
           ]
@@ -185,16 +184,16 @@ tLastTest =
 tRemoveTail :: Test
 tRemoveTail =
   TestList
-    [ "Remove Tail Empty" ~: removeTail ftEmpty ~?= ftEmpty,
-      "Remove Tail 1" ~: removeTail ft1 ~?= ftEmpty,
-      "Remove Tail 2" ~: removeTail ft2 ~?= ft1,
-      "Remove Tail 3" ~: removeTail ft3 ~?= ft2,
-      "Remove Tail 4" ~: removeTail ft4 ~?= ft3,
-      "Remove Tail 5" ~: removeTail ft5 ~?= ft4,
-      "Remove Tail 6" ~: removeTail ft6 ~?= ft5,
-      "Remove Tail 7" ~: removeTail ft7 ~?= ft6,
-      "Remove Tail 8" ~: removeTail ft8 ~?= ft7,
-      "Remove Tail 9" ~: removeTail ft9 ~?= ft8
+    [ "Remove Tail Empty" ~: removeLast ftEmpty ~?= ftEmpty,
+      "Remove Tail 1" ~: removeLast ft1 ~?= ftEmpty,
+      "Remove Tail 2" ~: removeLast ft2 ~?= ft1,
+      "Remove Tail 3" ~: removeLast ft3 ~?= ft2,
+      "Remove Tail 4" ~: removeLast ft4 ~?= ft3,
+      "Remove Tail 5" ~: removeLast ft5 ~?= ft4,
+      "Remove Tail 6" ~: removeLast ft6 ~?= ft5,
+      "Remove Tail 7" ~: removeLast ft7 ~?= ft6,
+      "Remove Tail 8" ~: removeLast ft8 ~?= ft7,
+      "Remove Tail 9" ~: removeLast ft9 ~?= ft8
     ]
 
 tIsEmpty :: Test
@@ -224,18 +223,16 @@ tSplitSome =
   TestList
     [ "splitSome singleton" ~: splitSome 0 (One 3) ~?= Split Nothing 3 Nothing,
       "splitSome Two at 0 (no split)"
-        ~: splitSome 0 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
+        ~: splitSome 0 (Two 3 4) ~?= Split Nothing 3 (Just (One 4)),
       "splitSome Two at 1"
-        ~: splitSome 1 (Two 3 4) ~?= Split Nothing 3 (Just (One 4)),
-      "splitSome Two at 2 (no split)"
-        ~: splitSome 2 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
+        ~: splitSome 1 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
       "splitSome Three at 0 (no split)"
         ~: splitSome 0 (Three 7 8 9)
-        ~?= Split (Just (Two 7 8)) 9 Nothing,
+        ~?= Split Nothing 7 (Just (Two 8 9)),
       "splitSome Three at 1"
-        ~: splitSome 1 (Three 7 8 9) ~?= Split Nothing 7 (Just (Two 8 9)),
+        ~: splitSome 1 (Three 7 8 9) ~?= Split (Just (One 7)) 8 (Just (One 9)),
       "splitSome Three at 2"
-        ~: splitSome 2 (Three 7 8 9) ~?= Split (Just (One 7)) 8 (Just (One 9))
+        ~: splitSome 2 (Three 7 8 9) ~?= Split (Just (Two 7 8)) 9 Nothing
     ]
 
 tSplitTree :: Test
@@ -405,10 +402,10 @@ prop_insertTailLast t x =
 -- d. tail
 -- no postconditions
 
--- e. removeTail
+-- e. removeLast
 prop_removeTailChanged :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Bool
 prop_removeTailChanged t =
-  let newTree = removeTail t
+  let newTree = removeLast t
    in case t of
         Nil -> newTree == t
         _ -> newTree /= t
@@ -474,19 +471,19 @@ qc7  = quickCheck (prop_split :: Int -> FingerTree.FingerTree Int -> Bool)
 -- a.  insert at tail and then remove tail, should be previous tail
 prop_insertRemoveTail :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
 prop_insertRemoveTail t x =
-  let t' = removeTail (insertTail x t)
+  let t' = removeLast (insertTail x t)
    in FingerTree.last t == FingerTree.last t'
 
 -- b. insert at tail twice and then remove tail, tails should be second tail
 prop_insertTwice :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> a -> Bool
 prop_insertTwice t x y =
-  let t' = removeTail (insertTail y (insertTail x t))
+  let t' = removeLast (insertTail y (insertTail x t))
    in FingerTree.last t' == Just x
 
 -- c. insert twice and then remove to check that they are still there
 prop_insertRemoveTwice :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> a -> Bool
 prop_insertRemoveTwice t x y =
-  let t' = removeTail (removeTail (insertTail y (insertTail x t)))
+  let t' = removeLast (removeLast (insertTail y (insertTail x t)))
    in FingerTree.last t' == FingerTree.last t
 
 -- d. isempty -> insert -> should no longer be empty
