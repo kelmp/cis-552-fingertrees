@@ -1,4 +1,7 @@
 {-# LANGUAGE ExtendedDefaultRules #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module FingerTree2 where
 
