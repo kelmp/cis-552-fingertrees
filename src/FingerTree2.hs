@@ -2,6 +2,9 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module FingerTree2 where
 
@@ -12,7 +15,8 @@ import Data.Functor ()
 import Data.Monoid ()
 import Data.Semigroup ()
 import Data.Traversable ()
-import Test.QuickCheck
+import Test.QuickCheck ()
+import Prelude hiding (head, tail, last)
 
 ----------------
 -- DATA TYPES --
@@ -97,7 +101,45 @@ pair x y = Pair (measure x <> measure y) x y
 triple :: Measured c a => a -> a -> a -> Tuple c a
 triple x y z = Triple (measure x <> measure y <> measure z) x y z
 
+------------------
+-- Type classes --
+------------------
+instance Foldable (FingerTree c) where
+  foldMap :: Monoid m => (a -> m) -> FingerTree c a -> m
+  foldMap _ Nil = mempty
+  foldMap f (Unit x) = f x
+  foldMap f (More _ l t r) = foldMap f l <> foldMap (foldMap f) t <> foldMap f r
 
+instance Foldable (Tuple c) where
+  foldMap :: Monoid m => (a -> m) -> Tuple c a -> m
+  foldMap f (Pair _ x y) = f x <> f y
+  foldMap f (Triple _ x y z) = f x <> f y <> f z
+
+instance Foldable Some where
+  foldMap :: Monoid m => (a -> m) -> Some a -> m
+  foldMap f (One x) = f x
+  foldMap f (Two x y) = f x <> f y
+  foldMap f (Three x y z) = f x <> f y <> f z
+
+------------------------
+-- Pseudo-applicative --
+------------------------
+fmap' :: (Measured c1 a, Measured c2 b) =>
+  (a -> b) -> FingerTree c1 a -> FingerTree c2 b
+fmap' _ Nil = Nil
+fmap' f (Unit x) = Unit (f x)
+fmap' f (More _ l t r) =
+  more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
+
+fmapSome :: (a -> b) -> Some a -> Some b
+fmapSome f (One x) = One (f x)
+fmapSome f (Two x y) = Two (f x) (f y)
+fmapSome f (Three x y z) = Three (f x) (f y) (f z)
+
+fmapTuple :: (Measured c1 a, Measured c2 b) =>
+  (a -> b) -> Tuple c1 a -> Tuple c2 b
+fmapTuple f (Pair _ x y) = pair (f x) (f y)
+fmapTuple f (Triple _ x y z) = triple (f x) (f y) (f z)
 
 -----------
 -- Split --
@@ -279,3 +321,67 @@ listToTuples [] = []
 listToTuples [x, y] = [pair x y]
 listToTuples [x, y, z, w] = [pair x y, pair z w]
 listToTuples (x : y : z : xs) = triple x y z : listToTuples xs
+
+----------------------------------
+-- Head/tail related operations --
+----------------------------------
+-- first element
+head :: FingerTree c a -> Maybe a
+head Nil = Nothing
+head (Unit x) = Just x
+head (More _ (One x) _ _) = Just x
+head (More _ (Two x _) _ _) = Just x
+head (More _ (Three x _ _) _ _) = Just x
+
+-- last element
+last :: FingerTree c a -> Maybe a
+last Nil = Nothing
+last (Unit x) = Just x
+last (More _ _ _ (One x)) = Just x
+last (More _ _ _ (Two _ x)) = Just x
+last (More _ _ _ (Three _ _ x)) = Just x
+
+-- everything but the head
+tail :: Measured c a => FingerTree c a -> FingerTree c a
+tail (Unit _) = Nil
+tail (More _ (Three _ x y) ft r) = more (Two x y) ft r
+tail (More _ (Two _ x) ft r) = more (One x) ft r
+tail (More _ (One _) ft r) = case head ft of
+  -- ft is Nil
+  Nothing -> someToTree r
+  -- ft is not Nil
+  Just (Pair _ x y) -> more (Two x y) (tail ft) r
+  Just (Triple _ x _ _) -> more (One x) (map1 chop ft) r
+    where chop (Triple _ _ y z) = pair y z
+
+-- helper for tail
+map1 :: Measured c a => (a -> a) -> FingerTree c a -> FingerTree c a
+map1 _ Nil = Nil
+map1 f (Unit x) = Unit (f x)
+map1 f (More _ (One x) ft r) = more (One (f x)) ft r
+map1 f (More _ (Two x y) ft r) = more (Two (f x) y) ft r
+map1 f (More _ (Three x y z) ft r) = more (Three (f x) y z) ft r
+
+-- everything but the last element
+removeLast :: Measured c a => FingerTree c a -> FingerTree c a
+removeLast (Unit _) = Nil
+removeLast (More _ l ft (Three x y _)) = more l ft (Two x y)
+removeLast (More _ l ft (Two x _)) = more l ft (One x)
+removeLast (More _ l ft (One _)) = case last ft of
+  -- ft is Nil
+  Nothing -> someToTree l
+  -- ft is not Nil
+  Just (Pair _ x y) -> more l (removeLast ft) (Two x y)
+  Just (Triple _ x y z) -> more l (removeLast ft) (Three x y z)
+
+--------------------------
+-- Random other methods --
+--------------------------
+
+fromList :: Measured c a => [a] -> FingerTree c a
+fromList = foldr insertHead Nil
+
+-- this was only used for testing
+isEmpty :: FingerTree c a -> Bool
+isEmpty Nil = True
+isEmpty _ = False
