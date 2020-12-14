@@ -45,18 +45,40 @@ listBench =
         (arbFTreesAndLists 1000 1 2)
         ( \ ~(fts, ls) ->
             bgroup
-              "ft v. list repeat insertTail: 1000 + 1 (x1000)"
-              [ bench "fingertree" $ nf (foldr FT.insertTail (P.head fts)) (ls P.!! 1),
-                bench "list" $ nf (foldr (\x acc -> acc ++ [x]) (P.head ls)) (ls P.!! 1)
+              "ft O(1) v. list O(n) repeat insertTail: 1000 + 1 (x1000)"
+              [ bench "fingertree" $
+                  nf (foldr FT.insertTail (P.head fts)) (ls P.!! 1),
+                bench "list" $
+                  nf (foldr (\x acc -> acc ++ [x]) (P.head ls)) (ls P.!! 1)
               ]
         ),
       env
         (arbFTreesAndLists 100000 2 2)
         ( \ ~(fts, ls) ->
             bgroup
-              "ft v. list append: 100000 + 100000"
+              "ft O(log n) v. list O(n) append: 100000 + 100000"
               [ bench "fingertree" $ nf (FT.append (P.head fts)) (fts P.!! 1),
                 bench "list" $ nf (P.head ls ++) (ls P.!! 1)
+              ]
+        ),
+      env
+        (arbFTreesAndLists 1000 1 1)
+        ( \ ~(fts, ls) ->
+            bgroup
+              "ft O(log n) v. list O(1) repeat tail: 1000"
+              [ bench "fingertree" $ let ft = P.head fts in
+                  nf (foldr (\_ acc -> FT.tail acc) ft) ft,
+                bench "list" $ let l = P.head ls in
+                  nf (foldr (\_ acc -> P.tail acc) l) l 
+              ]
+        ),
+      env
+        (arbFTreesAndLists 100000 1 1)
+        ( \ ~(fts, ls) ->
+            bgroup
+              "ft O(1) v. list O(n) last: 100000"
+              [ bench "fingertree" $ nf FT.last $ P.head fts,
+                bench "list" $ nf P.last $ P.head ls
               ]
         )
     ]
