@@ -93,6 +93,9 @@ insertAt = undefined
 fromList :: Measured a => [a] -> Sequence a
 fromList = Seq . FingerTree.fromList
 
+toList :: Measured a => Sequence a -> [a]
+toList (Seq t) = FingerTree.toList t
+
 null :: Eq a => Measured a => Sequence a -> Bool
 null (Seq t) = t == Nil
 
