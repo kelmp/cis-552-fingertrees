@@ -102,7 +102,8 @@ verboseAddPerson ft = do
   if fastPass p then do
     putStrLn $ name p ++ " is being added to the front (thanks, fastpass!)"
     return $ insertHead p ft else do
-      putStrLn $ name p ++ " is being added to the end because they're poor like me :("
+      putStrLn $ name p ++
+        " is being added to the end because they're poor like me :("
       return $ insertTail p ft
 
 addPeople :: Int -> FingerTree Person -> IO (FingerTree Person)
