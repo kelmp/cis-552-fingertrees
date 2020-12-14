@@ -1,13 +1,8 @@
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 
 import Data.FingerTree as FT
 import Data.Maybe as Maybe
-import FingerTree as FingerTree
+import FingerTree
 -- ( FingerTree.FingerTree (..),
 --   append,
 --   concat,
@@ -17,13 +12,15 @@ import FingerTree as FingerTree
 --   insertTail,
 --   isEmpty,
 --   last,
---   removeTail,
+--   removeLast,
 --   split,
 --   tail,
 --   toList,
 -- )
 import Test.HUnit
 import Test.QuickCheck
+
+default (Int)
 
 main :: IO ()
 main = testAll
@@ -47,6 +44,8 @@ allHUnit = do
             tTail,
             tIsEmpty,
             tConcat,
+            tSplitSome,
+            tSplitTree,
             tSplit
             -- tMap
           ]
@@ -185,16 +184,16 @@ tLastTest =
 tRemoveTail :: Test
 tRemoveTail =
   TestList
-    [ "Remove Tail Empty" ~: removeTail ftEmpty ~?= ftEmpty,
-      "Remove Tail 1" ~: removeTail ft1 ~?= ftEmpty,
-      "Remove Tail 2" ~: removeTail ft2 ~?= ft1,
-      "Remove Tail 3" ~: removeTail ft3 ~?= ft2,
-      "Remove Tail 4" ~: removeTail ft4 ~?= ft3,
-      "Remove Tail 5" ~: removeTail ft5 ~?= ft4,
-      "Remove Tail 6" ~: removeTail ft6 ~?= ft5,
-      "Remove Tail 7" ~: removeTail ft7 ~?= ft6,
-      "Remove Tail 8" ~: removeTail ft8 ~?= ft7,
-      "Remove Tail 9" ~: removeTail ft9 ~?= ft8
+    [ "Remove Tail Empty" ~: removeLast ftEmpty ~?= ftEmpty,
+      "Remove Tail 1" ~: removeLast ft1 ~?= ftEmpty,
+      "Remove Tail 2" ~: removeLast ft2 ~?= ft1,
+      "Remove Tail 3" ~: removeLast ft3 ~?= ft2,
+      "Remove Tail 4" ~: removeLast ft4 ~?= ft3,
+      "Remove Tail 5" ~: removeLast ft5 ~?= ft4,
+      "Remove Tail 6" ~: removeLast ft6 ~?= ft5,
+      "Remove Tail 7" ~: removeLast ft7 ~?= ft6,
+      "Remove Tail 8" ~: removeLast ft8 ~?= ft7,
+      "Remove Tail 9" ~: removeLast ft9 ~?= ft8
     ]
 
 tIsEmpty :: Test
@@ -224,48 +223,82 @@ tSplitSome =
   TestList
     [ "splitSome singleton" ~: splitSome 0 (One 3) ~?= Split Nothing 3 Nothing,
       "splitSome Two at 0 (no split)"
-        ~: splitSome 0 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
+        ~: splitSome 0 (Two 3 4) ~?= Split Nothing 3 (Just (One 4)),
       "splitSome Two at 1"
-        ~: splitSome 1 (Two 3 4) ~?= Split Nothing 3 (Just (One 4)),
-      "splitSome Two at 2 (no split)"
-        ~: splitSome 2 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
+        ~: splitSome 1 (Two 3 4) ~?= Split (Just (One 3)) 4 Nothing,
       "splitSome Three at 0 (no split)"
         ~: splitSome 0 (Three 7 8 9)
-        ~?= Split (Just (Two 7 8)) 9 Nothing,
+        ~?= Split Nothing 7 (Just (Two 8 9)),
       "splitSome Three at 1"
-        ~: splitSome 1 (Three 7 8 9) ~?= Split Nothing 7 (Just (Two 8 9)),
+        ~: splitSome 1 (Three 7 8 9) ~?= Split (Just (One 7)) 8 (Just (One 9)),
       "splitSome Three at 2"
-        ~: splitSome 2 (Three 7 8 9) ~?= Split (Just (One 7)) 8 (Just (One 9))
+        ~: splitSome 2 (Three 7 8 9) ~?= Split (Just (Two 7 8)) 9 Nothing
     ]
 
 tSplitTree :: Test
 tSplitTree =
   TestList
     [ "splitTree len 1" ~: splitTree 0 ft1 ~?= Split Nil 1 Nil,
-      "splitTree len 2 at 0" ~: splitTree 0 ft2 ~?= Split (Unit 1) 2 Nil,
-      "splitTree len 2 at 1" ~: splitTree 1 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 2 at 0" ~: splitTree 0 ft2 ~?= Split Nil 1 (Unit 2),
+      "splitTree len 2 at 1" ~: splitTree 1 ft2 ~?= Split (Unit 1) 2 Nil,
       "splitTree len 3 at 0"
-        ~: splitTree 0 ft3 ~?= Split (more (One 1) Nil (One 2)) 3 Nil,
+        ~: splitTree 0 ft3 ~?= Split Nil 1 (more (One 2) Nil (One 3)),
       "splitTree len 3 at 1"
-        ~: splitTree 1 ft3 ~?= Split Nil 1 (more (One 2) Nil (One 3)),
+        ~: splitTree 1 ft3 ~?= Split (Unit 1) 2 (Unit 3),
       "splitTree len 3 at 2"
-        ~: splitTree 2 ft3 ~?= Split (Unit 1) 2 (Unit 3),
-      "splitTree len 3 at hi"
-        ~: splitTree 3 ft3 ~?= Split (more (One 1) Nil (One 2)) 3 Nil,
+        ~: splitTree 2 ft3 ~?= Split (more (One 1) Nil (One 2)) 3 Nil,
       "splitTree len 4 at 0"
-        ~: splitTree 0 ft4 ~?= Split (more (One 1) Nil (Two 2 3)) 4 Nil,
+        ~: splitTree 0 ft4 ~?= Split Nil 1 (more (One 2) Nil (Two 3 4)),
       "splitTree len 4 at 1"
-        ~: splitTree 1 ft4 ~?= Split Nil 1 (More 3 (One 2) Nil (Two 3 4)),
+        ~: splitTree 1 ft4 ~?= Split (Unit 1) 2 (more (One 3) Nil (One 4)),
       "splitTree len 4 at 2"
-        ~: splitTree 2 ft4 ~?= Split (Unit 1) 2 (More 2 (One 3) Nil (One 4)),
+        ~: splitTree 2 ft4 ~?= Split (more (One 1) Nil (One 2)) 3 (Unit 4),
       "splitTree len 4 at 3"
-        ~: splitTree 3 ft4 ~?= Split (More 2 (One 1) Nil (One 2)) 3 (Unit 4)
+        ~: splitTree 3 ft4 ~?= Split (more (One 1) Nil (Two 2 3)) 4 Nil
     ]
+
+tupleMap :: (a, a) -> (a -> b) -> (b, b)
+tupleMap (x, y) f = (f x, f y)
 
 tSplit :: Test
 tSplit =
   TestList
-    []
+    ["split empty index in bounds" ~: FingerTree.split 0 ftEmpty ~?= (Nil, Nil),
+     "split empty index out of bounds" ~: FingerTree.split 10 ftEmpty ~?= (Nil, Nil),
+     "split len 1, split at 0" ~: FingerTree.split 0 ft1 ~?= (Nil, Unit 1),
+     "split len 1, split at 1" ~: FingerTree.split 1 ft1 ~?=  (Unit 1, Nil),
+     "split len 1, split out of bounds" ~: FingerTree.split 2 ft1 ~?=  (Unit 1, Nil),
+     "split len 2, split at 0" ~: tupleMap (FingerTree.split 0 ft2) FingerTree.toList ~?= ([], [1,2]),
+     "split len 2, split at 1" ~: tupleMap (FingerTree.split 1 ft2) FingerTree.toList ~?= ([1], [2]),
+     "split len 2, split at 2" ~: tupleMap (FingerTree.split 2 ft2) FingerTree.toList ~?= ([1,2], []),
+     "split len 2, split at 5" ~: tupleMap (FingerTree.split 5 ft2) FingerTree.toList ~?= ([1,2], []),
+     "split len 3, split at 0" ~: tupleMap (FingerTree.split 0 ft3) FingerTree.toList ~?= ([], [1,2,3]),
+     "split len 3, split at 1" ~: tupleMap (FingerTree.split 1 ft3) FingerTree.toList ~?= ([1], [2,3]),
+     "split len 3, split at 2" ~: tupleMap (FingerTree.split 2 ft3) FingerTree.toList ~?= ([1,2], [3]),
+     "split len 4, split at 0" ~: tupleMap (FingerTree.split 0 ft4) FingerTree.toList ~?= ([], [1,2,3,4]),
+     "split len 4, split at 2" ~: tupleMap (FingerTree.split 2 ft4) FingerTree.toList ~?= ([1,2], [3,4]),
+     "split len 4, split at 3" ~: tupleMap (FingerTree.split 3 ft4) FingerTree.toList ~?= ([1,2,3], [4]),
+     "split len 5, split at 0" ~: tupleMap (FingerTree.split 0 ft5) FingerTree.toList ~?= ([], [1,2,3,4,5]),
+     "split len 5, split at 3" ~: tupleMap (FingerTree.split 3 ft5) FingerTree.toList ~?= ([1,2,3], [4,5]),
+     "split len 6, split at 0" ~: tupleMap (FingerTree.split 0 ft6) FingerTree.toList ~?= ([], [1,2,3,4,5,6]),
+     "split len 6, split at 4" ~: tupleMap (FingerTree.split 4 ft6) FingerTree.toList ~?= ([1,2,3,4],[5,6]),
+     "split len 7, split at 0" ~: tupleMap (FingerTree.split 0 ft7) FingerTree.toList ~?= ([], [1,2,3,4,5,6,7]),
+     "split len 7, split at 5" ~: tupleMap (FingerTree.split 5 ft7) FingerTree.toList ~?= ([1,2,3,4,5],[6,7]),
+     "split len 8, split at 0" ~: tupleMap (FingerTree.split 0 ft8) FingerTree.toList ~?= ([], [1,2,3,4,5,6,7,8]),
+     "split len 8, split at 3" ~: tupleMap (FingerTree.split 3 ft8) FingerTree.toList ~?= ([1,2,3], [4,5,6,7,8]),
+     "split len 8, split at 5" ~: tupleMap (FingerTree.split 5 ft8) FingerTree.toList ~?= ([1,2,3,4,5], [6,7,8]),
+     "split len 9, split at 0" ~: tupleMap (FingerTree.split 0 ft9) FingerTree.toList ~?= ([], [1,2,3,4,5,6,7,8,9]),
+     "split len 9, split at 1" ~: tupleMap (FingerTree.split 1 ft9) FingerTree.toList ~?= ([1],[2,3,4,5,6,7,8,9]),
+     "split len 9, split at 2" ~: tupleMap (FingerTree.split 2 ft9) FingerTree.toList ~?= ([1,2],[3,4,5,6,7,8,9]),
+     "split len 9, split at 3" ~: tupleMap (FingerTree.split 3 ft9) FingerTree.toList ~?= ([1,2,3],[4,5,6,7,8,9]),
+     "split len 9, split at 4" ~: tupleMap (FingerTree.split 4 ft9) FingerTree.toList ~?= ([1,2,3,4],[5,6,7,8,9]),
+     "split len 9, split at 5" ~: tupleMap (FingerTree.split 5 ft9) FingerTree.toList ~?= ([1,2,3,4,5],[6,7,8,9]),
+     "split len 9, split at 6" ~: tupleMap (FingerTree.split 6 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6],[7,8,9]),
+     "split len 9, split at 7" ~: tupleMap (FingerTree.split 7 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7],[8,9]),
+     "split len 9, split at 8" ~: tupleMap (FingerTree.split 8 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7,8],[9]),
+     "split len 9, split at 9" ~: tupleMap (FingerTree.split 9 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7,8,9],[]),
+     "split len 9, split at 10" ~: tupleMap (FingerTree.split 10 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7,8,9],[])
+    ]
 
 -- "Split all left" ~: undefined,
 -- "Split all right" ~: undefined,
@@ -369,10 +402,10 @@ prop_insertTailLast t x =
 -- d. tail
 -- no postconditions
 
--- e. removeTail
+-- e. removeLast
 prop_removeTailChanged :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Bool
 prop_removeTailChanged t =
-  let newTree = removeTail t
+  let newTree = removeLast t
    in case t of
         Nil -> newTree == t
         _ -> newTree /= t
@@ -438,19 +471,19 @@ qc7  = quickCheck (prop_split :: Int -> FingerTree.FingerTree Int -> Bool)
 -- a.  insert at tail and then remove tail, should be previous tail
 prop_insertRemoveTail :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
 prop_insertRemoveTail t x =
-  let t' = removeTail (insertTail x t)
+  let t' = removeLast (insertTail x t)
    in FingerTree.last t == FingerTree.last t'
 
 -- b. insert at tail twice and then remove tail, tails should be second tail
 prop_insertTwice :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> a -> Bool
 prop_insertTwice t x y =
-  let t' = removeTail (insertTail y (insertTail x t))
+  let t' = removeLast (insertTail y (insertTail x t))
    in FingerTree.last t' == Just x
 
 -- c. insert twice and then remove to check that they are still there
 prop_insertRemoveTwice :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> a -> Bool
 prop_insertRemoveTwice t x y =
-  let t' = removeTail (removeTail (insertTail y (insertTail x t)))
+  let t' = removeLast (removeLast (insertTail y (insertTail x t)))
    in FingerTree.last t' == FingerTree.last t
 
 -- d. isempty -> insert -> should no longer be empty
@@ -466,6 +499,11 @@ prop_insertAppend t1 t2 x1 x2 =
            in FingerTree.head t' == FingerTree.head t1'
                 && FingerTree.last t' == FingerTree.last t2'
                 && toList t' == toList t1' ++ toList t2'
+
+-- Added this:
+prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
+prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
+  t == append t1 t2
 
 -- TODO: Add a metamorphic test (at leat one) for split:
 -- f. append then split (and vice-versa) -- should end up with what you started
@@ -502,7 +540,7 @@ getFirst (x : xs) = Just x
 getFirst [] = Nothing
 
 getLast :: [a] -> Maybe a
-getLast (x : []) = Just x
+getLast [x] = Just x
 getLast (x : xs) = getLast xs
 getLast [] = Nothing
 
@@ -643,10 +681,18 @@ qcFingerTree = putStrLn "I am in Missouri"
 -- >> qc12
 
 
+<<<<<<< HEAD
 -- Added this:
 prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
 prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
   t == append t1 t2
+=======
+
+-- Added this:
+-- prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
+-- prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
+--   t == append t1 t2
+>>>>>>> 7e00434816ccc7df7854d83d2f9e36979dd99231
 
 -- -- ADDED THIS STUFF:
 -- prop_modelSplit :: FingerTree.Measured a => Eq a => Int -> [a] -> Bool
