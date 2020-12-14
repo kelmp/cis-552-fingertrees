@@ -2,7 +2,8 @@ module Benchmark where
 
 import Data.FingerTree as FTlib ()
 import Data.List as List ()
-import FingerTree as FT
+import Data.Sequence as Seq
+import FingerTree as FT (FingerTree, tail, fromList, last, insertTail, append)
 import Criterion.Main (defaultMainWith, defaultConfig, env, bgroup, bench, nf)
 import Criterion.Types (reportFile)
 import Test.QuickCheck (generate, vectorOf, arbitrary)
@@ -31,11 +32,26 @@ arbLists len nLists l = do
   let l' = v : l in
     arbLists len (nLists - 1) l'
 
+arbSeqs :: Int -> Int -> [Seq Int] -> IO [Seq Int]
+arbSeqs _ 0 l = return l
+arbSeqs len nSeqs l = do
+  v <- arbitraryIntVectorOf len
+  let l' = Seq.fromList v : l in
+    arbSeqs len (nSeqs - 1) l'
+
 arbFTreesAndLists :: Int -> Int -> Int -> IO ([FT.FingerTree Int], [[Int]])
 arbFTreesAndLists len nTrees nLists = do
-  aft <- arbFTrees len nTrees []
-  al <- arbLists len nLists []
-  return (aft, al)
+  trees <- arbFTrees len nTrees []
+  lists <- arbLists len nLists []
+  return (trees, lists)
+
+arbFTreesSeqsLists :: Int -> Int -> Int -> Int ->
+  IO ([FT.FingerTree Int], [Seq Int], [[Int]])
+arbFTreesSeqsLists len nTrees nSeqs nLists = do
+  trees <- arbFTrees len nTrees []
+  seqs <- arbSeqs len nSeqs []
+  lists <- arbLists len nLists []
+  return (trees, seqs, lists)
 
 listBench :: IO ()
 listBench =
@@ -79,6 +95,42 @@ listBench =
               "ft O(1) v. list O(n) last: 100000"
               [ bench "fingertree" $ nf FT.last $ P.head fts,
                 bench "list" $ nf P.last $ P.head ls
+              ]
+        )
+    ]
+
+seqBench :: IO ()
+seqBench =
+  defaultMainWith
+    (defaultConfig {reportFile = Just "ft-vs-seq.html"})
+    [ env
+        (arbFTreesSeqsLists 1000 1 1 1)
+        ( \ ~(fts, ss, ls) ->
+            bgroup
+              "ft v. seq repeat insertTail: 1000 + 1 (x1000)"
+              [ bench "fingertree" $
+                  nf (foldr FT.insertTail (P.head fts)) (P.head ls),
+                bench "seq" $
+                  nf (foldr (flip (|>)) (P.head ss)) (P.head ls)
+              ]
+        ),
+      env
+        (arbFTreesSeqsLists 100000 2 2 0)
+        ( \ ~(fts, ss, _) ->
+            bgroup
+              "ft v. seq append: 100000 + 100000"
+              [ bench "fingertree" $ nf (FT.append (P.head fts)) (fts P.!! 1),
+                bench "seq" $ nf (P.head ss ><) (ss P.!! 1)
+              ]
+        ),
+      env
+        (arbFTreesSeqsLists 100000 1 1 0)
+        ( \ ~(fts, ss, _) ->
+            bgroup
+              "ft O(1) v. list O(n) last: 100000"
+              [ bench "fingertree" $ nf FT.last $ P.head fts,
+                bench "list" $ let seq = P.head ss in
+                  nf (seq !?) $ Seq.length seq
               ]
         )
     ]
