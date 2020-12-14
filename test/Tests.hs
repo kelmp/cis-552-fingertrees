@@ -1,9 +1,11 @@
 {-# LANGUAGE ExtendedDefaultRules #-}
 
-import Data.FingerTree as FT
+import Data.FingerTree as FTLib
 import Data.Maybe as Maybe
-import FingerTree
--- ( FingerTree.FingerTree (..),
+import FingerTree as FT
+import PriorityQueue as PQ
+import Sequence
+-- ( FT.FingerTree (..),
 --   append,
 --   concat,
 --   fromList,
@@ -29,6 +31,8 @@ testAll :: IO ()
 testAll = do
   allHUnit
   allQuickCheck
+  qcSequence
+  qcPQ
   putStrLn ""
 
 allHUnit :: IO ()
@@ -37,23 +41,26 @@ allHUnit = do
     runTestTT
       ( TestList
           [ tToList,
-            -- tConstruct,
             tInsertHead,
             tInsertTail,
+            tLastTest,
+            tRemoveTail,
             tHead,
             tTail,
             tIsEmpty,
-            tConcat,
+            tFromList,
+            tLength,
             tSplitSome,
             tSplitTree,
-            tSplit
-            -- tMap
+            tSplit,
+            tSeqUnit,
+            tPQUnit
           ]
       )
   putStrLn ""
 
 allQuickCheck :: IO ()
-allQuickCheck = qcFingerTree
+allQuickCheck = qcPostConditions >> qcMetamorphic >> qcModel
 
 quickCheckN :: Test.QuickCheck.Testable prop => Int -> prop -> IO ()
 quickCheckN n = quickCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
@@ -61,46 +68,45 @@ quickCheckN n = quickCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
 verboseCheckN :: Test.QuickCheck.Testable prop => Int -> prop -> IO ()
 verboseCheckN n = verboseCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
 
--- TODO:
--- (1) fill in unit tests
--- (2) add quickcheck properties for all the functions
--- (3) add quickcheck properties for remaining type-classes that FingerTree.FingerTrees implements
--- (3) create a quickcheck property that checks if its a valid Finger Tree
---     (not sure how exactly this will be defined)
---     and use that to replace AVL_prop preoprty
--- (4) add unit tests and quickcheck properties for priority queues
---     and sequences
-
-ftEmpty :: FingerTree.FingerTree Int
+ftEmpty :: FT.FingerTree Int
 ftEmpty = Nil
 
-ft1 :: FingerTree.FingerTree Int
+ft1 :: FT.FingerTree Int
 ft1 = Unit 1
 
-ft2 :: FingerTree.FingerTree Int
+ft2 :: FT.FingerTree Int
 ft2 = More 2 (One 1) Nil (One 2)
 
-ft3 :: FingerTree.FingerTree Int
+ft3 :: FT.FingerTree Int
 ft3 = More 3 (One 1) Nil (Two 2 3)
 
-ft4 :: FingerTree.FingerTree Int
+ft4 :: FT.FingerTree Int
 ft4 = More 4 (One 1) Nil (Three 2 3 4)
 
-ft5 :: FingerTree.FingerTree Int
+ft5 :: FT.FingerTree Int
 ft5 = More 5 (One 1) (Unit (Pair 2 2 3)) (Two 4 5)
 
-ft6 :: FingerTree.FingerTree Int
+ft6 :: FT.FingerTree Int
 ft6 = More 6 (One 1) (Unit (Pair 2 2 3)) (Three 4 5 6)
 
-ft7 :: FingerTree.FingerTree Int
+ft7 :: FT.FingerTree Int
 ft7 = More 7 (One 1) (More 4 (One (Pair 2 2 3)) Nil (One (Pair 2 4 5))) (Two 6 7)
 
-ft8 :: FingerTree.FingerTree Int
+ft8 :: FT.FingerTree Int
 ft8 = More 8 (One 1) (More 4 (One (Pair 2 2 3)) Nil (One (Pair 2 4 5))) (Three 6 7 8)
 
-ft9 :: FingerTree.FingerTree Int
+ft9 :: FT.FingerTree Int
 ft9 =
-  More 9 (One 1) (More 6 (One (Pair 2 2 3)) Nil (Two (Pair 2 4 5) (Pair 2 6 7))) (Two 8 9)
+  More
+    9
+    (One 1)
+    ( More
+        6
+        (One (Pair 2 2 3))
+        Nil
+        (Two (Pair 2 4 5) (Pair 2 6 7))
+    )
+    (Two 8 9)
 
 tInsertHead :: Test
 tInsertHead =
@@ -108,11 +114,30 @@ tInsertHead =
     [ "Insert head 0 -> 1" ~: insertHead (1 :: Int) Nil ~?= Unit 1,
       "Insert head 1 -> 2" ~: insertHead (2 :: Int) (Unit 1)
         ~?= More 2 (One 2) Nil (One 1),
-      "Insert head 4 -> 5" ~: insertHead (5 :: Int) (More 4 (Three 4 3 2) Nil (One 1))
+      "Insert head 4 -> 5"
+        ~: insertHead
+          (5 :: Int)
+          (More 4 (Three 4 3 2) Nil (One 1))
         ~?= More 5 (Two 5 4) (Unit (Pair 2 3 2)) (One 1),
       "Insert head 6 -> 7"
-        ~: insertHead (7 :: Int) (More 6 (Three 6 5 4) (Unit (Pair 2 3 2)) (One 1))
-        ~?= More 7 (Two 7 6) (More 4 (One (Pair 2 5 4)) Nil (One (Pair 2 3 2))) (One 1),
+        ~: insertHead
+          (7 :: Int)
+          ( More
+              6
+              (Three 6 5 4)
+              (Unit (Pair 2 3 2))
+              (One 1)
+          )
+        ~?= More
+          7
+          (Two 7 6)
+          ( More
+              4
+              (One (Pair 2 5 4))
+              Nil
+              (One (Pair 2 3 2))
+          )
+          (One 1),
       "Insert head 8 -> 9"
         ~: insertHead
           (9 :: Int)
@@ -136,11 +161,18 @@ tInsertHead =
 
 tTail :: Test
 tTail =
-  TestList []
-
-tConcat :: Test
-tConcat =
-  TestList []
+  TestList
+    [ "Tail 0 -> 0" ~: FT.tail Nil ~?= Nil,
+      "Tail 1 -> 0" ~: FT.tail ft1 ~?= Nil,
+      "Tail 2 -> 1" ~: FT.toList (FT.tail ft2) ~?= [2],
+      "Tail 3 -> 2" ~: FT.toList (FT.tail ft3) ~?= [2, 3],
+      "Tail 4 -> 3" ~: FT.toList (FT.tail ft4) ~?= [2, 3, 4],
+      "Tail 5 -> 4" ~: FT.toList (FT.tail ft5) ~?= [2, 3, 4, 5],
+      "Tail 6 -> 5" ~: FT.toList (FT.tail ft6) ~?= [2, 3, 4, 5, 6],
+      "Tail 7 -> 6" ~: FT.toList (FT.tail ft7) ~?= [2, 3, 4, 5, 6, 7],
+      "Tail 8 -> 7" ~: FT.toList (FT.tail ft8) ~?= [2, 3, 4, 5, 6, 7, 8],
+      "Tail 9 -> 8" ~: FT.toList (FT.tail ft9) ~?= [2, 3, 4, 5, 6, 7, 8, 9]
+    ]
 
 tInsertTail :: Test
 tInsertTail =
@@ -158,42 +190,42 @@ tInsertTail =
 tHead :: Test
 tHead =
   TestList
-    [ "Head empty" ~: FingerTree.head ftEmpty ~?= Nothing,
-      "Head unit" ~: FingerTree.head ft1 ~?= Just 1,
-      "Head more (one ...)" ~: FingerTree.head ft9 ~?= Just 1,
-      "Head more (two ....)" ~: FingerTree.head (insertHead 0 ft9) ~?= Just 0,
+    [ "Head empty" ~: FT.head ftEmpty ~?= Nothing,
+      "Head unit" ~: FT.head ft1 ~?= Just 1,
+      "Head more (one ...)" ~: FT.head ft9 ~?= Just 1,
+      "Head more (two ....)" ~: FT.head (insertHead 0 ft9) ~?= Just 0,
       "Head more (three ....)"
-        ~: FingerTree.head (insertHead (-1) (insertHead 0 ft9)) ~?= Just (-1)
+        ~: FT.head (insertHead (-1) (insertHead 0 ft9)) ~?= Just (-1)
     ]
 
 tLastTest :: Test
 tLastTest =
   TestList
-    [ "Last empty" ~: FingerTree.last ftEmpty ~?= Nothing,
-      "Last 1" ~: FingerTree.last ft1 ~?= Just 1,
-      "Last 2" ~: FingerTree.last ft2 ~?= Just 2,
-      "Last 3" ~: FingerTree.last ft3 ~?= Just 3,
-      "Last 4" ~: FingerTree.last ft4 ~?= Just 4,
-      "Last 5" ~: FingerTree.last ft5 ~?= Just 5,
-      "Last 6" ~: FingerTree.last ft6 ~?= Just 6,
-      "Last 7" ~: FingerTree.last ft7 ~?= Just 7,
-      "Last 8" ~: FingerTree.last ft8 ~?= Just 8,
-      "Last 9" ~: FingerTree.last ft9 ~?= Just 9
+    [ "Last empty" ~: FT.last ftEmpty ~?= Nothing,
+      "Last 1" ~: FT.last ft1 ~?= Just 1,
+      "Last 2" ~: FT.last ft2 ~?= Just 2,
+      "Last 3" ~: FT.last ft3 ~?= Just 3,
+      "Last 4" ~: FT.last ft4 ~?= Just 4,
+      "Last 5" ~: FT.last ft5 ~?= Just 5,
+      "Last 6" ~: FT.last ft6 ~?= Just 6,
+      "Last 7" ~: FT.last ft7 ~?= Just 7,
+      "Last 8" ~: FT.last ft8 ~?= Just 8,
+      "Last 9" ~: FT.last ft9 ~?= Just 9
     ]
 
 tRemoveTail :: Test
 tRemoveTail =
   TestList
-    [ "Remove Tail Empty" ~: removeLast ftEmpty ~?= ftEmpty,
-      "Remove Tail 1" ~: removeLast ft1 ~?= ftEmpty,
-      "Remove Tail 2" ~: removeLast ft2 ~?= ft1,
-      "Remove Tail 3" ~: removeLast ft3 ~?= ft2,
-      "Remove Tail 4" ~: removeLast ft4 ~?= ft3,
-      "Remove Tail 5" ~: removeLast ft5 ~?= ft4,
-      "Remove Tail 6" ~: removeLast ft6 ~?= ft5,
-      "Remove Tail 7" ~: removeLast ft7 ~?= ft6,
-      "Remove Tail 8" ~: removeLast ft8 ~?= ft7,
-      "Remove Tail 9" ~: removeLast ft9 ~?= ft8
+    [ "Remove Tail Empty" ~: FT.toList (removeLast ftEmpty) ~?= [],
+      "Remove Tail 1" ~: FT.toList (removeLast ft1) ~?= [],
+      "Remove Tail 2" ~: FT.toList (removeLast ft2) ~?= [1],
+      "Remove Tail 3" ~: FT.toList (removeLast ft3) ~?= [1 .. 2],
+      "Remove Tail 4" ~: FT.toList (removeLast ft4) ~?= [1 .. 3],
+      "Remove Tail 5" ~: FT.toList (removeLast ft5) ~?= [1 .. 4],
+      "Remove Tail 6" ~: FT.toList (removeLast ft6) ~?= [1 .. 5],
+      "Remove Tail 7" ~: FT.toList (removeLast ft7) ~?= [1 .. 6],
+      "Remove Tail 8" ~: FT.toList (removeLast ft8) ~?= [1 .. 7],
+      "Remove Tail 9" ~: FT.toList (removeLast ft9) ~?= [1 .. 8]
     ]
 
 tIsEmpty :: Test
@@ -204,19 +236,6 @@ tIsEmpty =
         ~: all isEmpty [ft1, ft2, ft3, ft4, ft5, ft6, ft7, ft8, ft9]
         ~?= False
     ]
-
--- tConcat :: Test
--- tConcat =
---   TestList
---     []
-
--- "Concat two empty" ~: undefined,
--- "Concat first empty" ~: undefined,
--- "Concat second empty" ~: undefined,
--- "Concat both simple" ~: undefined,
--- "Concat both complex" ~: undefined
-
--- TODO split tuple
 
 tSplitSome :: Test
 tSplitSome =
@@ -263,277 +282,348 @@ tupleMap (x, y) f = (f x, f y)
 tSplit :: Test
 tSplit =
   TestList
-    ["split empty index in bounds" ~: FingerTree.split 0 ftEmpty ~?= (Nil, Nil),
-     "split empty index out of bounds" ~: FingerTree.split 10 ftEmpty ~?= (Nil, Nil),
-     "split len 1, split at 0" ~: FingerTree.split 0 ft1 ~?= (Nil, Unit 1),
-     "split len 1, split at 1" ~: FingerTree.split 1 ft1 ~?=  (Unit 1, Nil),
-     "split len 1, split out of bounds" ~: FingerTree.split 2 ft1 ~?=  (Unit 1, Nil),
-     "split len 2, split at 0" ~: tupleMap (FingerTree.split 0 ft2) FingerTree.toList ~?= ([], [1,2]),
-     "split len 2, split at 1" ~: tupleMap (FingerTree.split 1 ft2) FingerTree.toList ~?= ([1], [2]),
-     "split len 2, split at 2" ~: tupleMap (FingerTree.split 2 ft2) FingerTree.toList ~?= ([1,2], []),
-     "split len 2, split at 5" ~: tupleMap (FingerTree.split 5 ft2) FingerTree.toList ~?= ([1,2], []),
-     "split len 3, split at 0" ~: tupleMap (FingerTree.split 0 ft3) FingerTree.toList ~?= ([], [1,2,3]),
-     "split len 3, split at 1" ~: tupleMap (FingerTree.split 1 ft3) FingerTree.toList ~?= ([1], [2,3]),
-     "split len 3, split at 2" ~: tupleMap (FingerTree.split 2 ft3) FingerTree.toList ~?= ([1,2], [3]),
-     "split len 4, split at 0" ~: tupleMap (FingerTree.split 0 ft4) FingerTree.toList ~?= ([], [1,2,3,4]),
-     "split len 4, split at 2" ~: tupleMap (FingerTree.split 2 ft4) FingerTree.toList ~?= ([1,2], [3,4]),
-     "split len 4, split at 3" ~: tupleMap (FingerTree.split 3 ft4) FingerTree.toList ~?= ([1,2,3], [4]),
-     "split len 5, split at 0" ~: tupleMap (FingerTree.split 0 ft5) FingerTree.toList ~?= ([], [1,2,3,4,5]),
-     "split len 5, split at 3" ~: tupleMap (FingerTree.split 3 ft5) FingerTree.toList ~?= ([1,2,3], [4,5]),
-     "split len 6, split at 0" ~: tupleMap (FingerTree.split 0 ft6) FingerTree.toList ~?= ([], [1,2,3,4,5,6]),
-     "split len 6, split at 4" ~: tupleMap (FingerTree.split 4 ft6) FingerTree.toList ~?= ([1,2,3,4],[5,6]),
-     "split len 7, split at 0" ~: tupleMap (FingerTree.split 0 ft7) FingerTree.toList ~?= ([], [1,2,3,4,5,6,7]),
-     "split len 7, split at 5" ~: tupleMap (FingerTree.split 5 ft7) FingerTree.toList ~?= ([1,2,3,4,5],[6,7]),
-     "split len 8, split at 0" ~: tupleMap (FingerTree.split 0 ft8) FingerTree.toList ~?= ([], [1,2,3,4,5,6,7,8]),
-     "split len 8, split at 3" ~: tupleMap (FingerTree.split 3 ft8) FingerTree.toList ~?= ([1,2,3], [4,5,6,7,8]),
-     "split len 8, split at 5" ~: tupleMap (FingerTree.split 5 ft8) FingerTree.toList ~?= ([1,2,3,4,5], [6,7,8]),
-     "split len 9, split at 0" ~: tupleMap (FingerTree.split 0 ft9) FingerTree.toList ~?= ([], [1,2,3,4,5,6,7,8,9]),
-     "split len 9, split at 1" ~: tupleMap (FingerTree.split 1 ft9) FingerTree.toList ~?= ([1],[2,3,4,5,6,7,8,9]),
-     "split len 9, split at 2" ~: tupleMap (FingerTree.split 2 ft9) FingerTree.toList ~?= ([1,2],[3,4,5,6,7,8,9]),
-     "split len 9, split at 3" ~: tupleMap (FingerTree.split 3 ft9) FingerTree.toList ~?= ([1,2,3],[4,5,6,7,8,9]),
-     "split len 9, split at 4" ~: tupleMap (FingerTree.split 4 ft9) FingerTree.toList ~?= ([1,2,3,4],[5,6,7,8,9]),
-     "split len 9, split at 5" ~: tupleMap (FingerTree.split 5 ft9) FingerTree.toList ~?= ([1,2,3,4,5],[6,7,8,9]),
-     "split len 9, split at 6" ~: tupleMap (FingerTree.split 6 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6],[7,8,9]),
-     "split len 9, split at 7" ~: tupleMap (FingerTree.split 7 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7],[8,9]),
-     "split len 9, split at 8" ~: tupleMap (FingerTree.split 8 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7,8],[9]),
-     "split len 9, split at 9" ~: tupleMap (FingerTree.split 9 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7,8,9],[]),
-     "split len 9, split at 10" ~: tupleMap (FingerTree.split 10 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7,8,9],[])
+    [ "split empty index in bounds" ~: FT.split 0 ftEmpty ~?= (Nil, Nil),
+      "split empty index out of bounds" ~: FT.split 10 ftEmpty ~?= (Nil, Nil),
+      "split len 1, split at 0" ~: FT.split 0 ft1 ~?= (Nil, Unit 1),
+      "split len 1, split at 1" ~: FT.split 1 ft1 ~?= (Unit 1, Nil),
+      "split len 1, split out of bounds" ~: FT.split 2 ft1 ~?= (Unit 1, Nil),
+      "split len 2, split at 0"
+        ~: tupleMap (FT.split 0 ft2) FT.toList ~?= ([], [1, 2]),
+      "split len 2, split at 1"
+        ~: tupleMap (FT.split 1 ft2) FT.toList ~?= ([1], [2]),
+      "split len 2, split at 2"
+        ~: tupleMap (FT.split 2 ft2) FT.toList ~?= ([1, 2], []),
+      "split len 2, split at 5"
+        ~: tupleMap (FT.split 5 ft2) FT.toList ~?= ([1, 2], []),
+      "split len 3, split at 0"
+        ~: tupleMap (FT.split 0 ft3) FT.toList ~?= ([], [1, 2, 3]),
+      "split len 3, split at 1"
+        ~: tupleMap (FT.split 1 ft3) FT.toList ~?= ([1], [2, 3]),
+      "split len 3, split at 2"
+        ~: tupleMap (FT.split 2 ft3) FT.toList ~?= ([1, 2], [3]),
+      "split len 4, split at 0"
+        ~: tupleMap (FT.split 0 ft4) FT.toList ~?= ([], [1, 2, 3, 4]),
+      "split len 4, split at 2"
+        ~: tupleMap (FT.split 2 ft4) FT.toList ~?= ([1, 2], [3, 4]),
+      "split len 4, split at 3"
+        ~: tupleMap (FT.split 3 ft4) FT.toList ~?= ([1, 2, 3], [4]),
+      "split len 5, split at 0"
+        ~: tupleMap (FT.split 0 ft5) FT.toList ~?= ([], [1, 2, 3, 4, 5]),
+      "split len 5, split at 3"
+        ~: tupleMap (FT.split 3 ft5) FT.toList ~?= ([1, 2, 3], [4, 5]),
+      "split len 6, split at 0"
+        ~: tupleMap (FT.split 0 ft6) FT.toList ~?= ([], [1, 2, 3, 4, 5, 6]),
+      "split len 6, split at 4"
+        ~: tupleMap (FT.split 4 ft6) FT.toList ~?= ([1, 2, 3, 4], [5, 6]),
+      "split len 7, split at 0"
+        ~: tupleMap (FT.split 0 ft7) FT.toList ~?= ([], [1, 2, 3, 4, 5, 6, 7]),
+      "split len 7, split at 5"
+        ~: tupleMap (FT.split 5 ft7) FT.toList ~?= ([1, 2, 3, 4, 5], [6, 7]),
+      "split len 8, split at 0"
+        ~: tupleMap
+          (FT.split 0 ft8)
+          FT.toList
+          ~?= ([], [1, 2, 3, 4, 5, 6, 7, 8]),
+      "split len 8, split at 3"
+        ~: tupleMap
+          (FT.split 3 ft8)
+          FT.toList
+          ~?= ([1, 2, 3], [4, 5, 6, 7, 8]),
+      "split len 8, split at 5"
+        ~: tupleMap
+          (FT.split 5 ft8)
+          FT.toList
+          ~?= ([1, 2, 3, 4, 5], [6, 7, 8]),
+      "split len 9, split at 0"
+        ~: tupleMap
+          (FT.split 0 ft9)
+          FT.toList
+          ~?= ([], [1, 2, 3, 4, 5, 6, 7, 8, 9]),
+      "split len 9, split at 1"
+        ~: tupleMap
+          (FT.split 1 ft9)
+          FT.toList
+          ~?= ([1], [2, 3, 4, 5, 6, 7, 8, 9]),
+      "split len 9, split at 2"
+        ~: tupleMap
+          (FT.split 2 ft9)
+          FT.toList
+          ~?= ([1, 2], [3, 4, 5, 6, 7, 8, 9]),
+      "split len 9, split at 3"
+        ~: tupleMap
+          (FT.split 3 ft9)
+          FT.toList
+          ~?= ([1, 2, 3], [4, 5, 6, 7, 8, 9]),
+      "split len 9, split at 4"
+        ~: tupleMap
+          (FT.split 4 ft9)
+          FT.toList
+          ~?= ([1, 2, 3, 4], [5, 6, 7, 8, 9]),
+      "split len 9, split at 5"
+        ~: tupleMap
+          (FT.split 5 ft9)
+          FT.toList
+          ~?= ([1, 2, 3, 4, 5], [6, 7, 8, 9]),
+      "split len 9, split at 6"
+        ~: tupleMap
+          (FT.split 6 ft9)
+          FT.toList
+          ~?= ([1, 2, 3, 4, 5, 6], [7, 8, 9]),
+      "split len 9, split at 7"
+        ~: tupleMap
+          (FT.split 7 ft9)
+          FT.toList
+          ~?= ([1, 2, 3, 4, 5, 6, 7], [8, 9]),
+      "split len 9, split at 8"
+        ~: tupleMap
+          (FT.split 8 ft9)
+          FT.toList
+          ~?= ([1, 2, 3, 4, 5, 6, 7, 8], [9]),
+      "split len 9, split at 9"
+        ~: tupleMap
+          (FT.split 9 ft9)
+          FT.toList
+          ~?= ([1, 2, 3, 4, 5, 6, 7, 8, 9], []),
+      "split len 9, split at 10"
+        ~: tupleMap
+          (FT.split 10 ft9)
+          FT.toList
+          ~?= ([1, 2, 3, 4, 5, 6, 7, 8, 9], [])
     ]
-
--- "Split all left" ~: undefined,
--- "Split all right" ~: undefined,
--- "Split middle" ~: undefined
 
 tToList :: Test
 tToList =
   TestList
-    [ "toList empty" ~: toList ftEmpty ~?= [],
-      "toList 1" ~: toList ft1 ~?= [1],
-      "toList 2" ~: toList ft2 ~?= [1, 2],
-      "toList 3" ~: toList ft3 ~?= [1, 2, 3],
-      "toList 4" ~: toList ft4 ~?= [1, 2, 3, 4],
-      "toList 5" ~: toList ft5 ~?= [1, 2, 3, 4, 5],
-      "toList 6" ~: toList ft6 ~?= [1, 2, 3, 4, 5, 6],
-      "toList 7" ~: toList ft7 ~?= [1, 2, 3, 4, 5, 6, 7],
-      "toList 8" ~: toList ft8 ~?= [1, 2, 3, 4, 5, 6, 7, 8],
-      "toList 9" ~: toList ft9 ~?= [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    [ "toList empty" ~: FT.toList ftEmpty ~?= [],
+      "toList 1" ~: FT.toList ft1 ~?= [1],
+      "toList 2" ~: FT.toList ft2 ~?= [1, 2],
+      "toList 3" ~: FT.toList ft3 ~?= [1, 2, 3],
+      "toList 4" ~: FT.toList ft4 ~?= [1, 2, 3, 4],
+      "toList 5" ~: FT.toList ft5 ~?= [1, 2, 3, 4, 5],
+      "toList 6" ~: FT.toList ft6 ~?= [1, 2, 3, 4, 5, 6],
+      "toList 7" ~: FT.toList ft7 ~?= [1, 2, 3, 4, 5, 6, 7],
+      "toList 8" ~: FT.toList ft8 ~?= [1, 2, 3, 4, 5, 6, 7, 8],
+      "toList 9" ~: FT.toList ft9 ~?= [1, 2, 3, 4, 5, 6, 7, 8, 9]
     ]
 
 tFromList :: Test
 tFromList =
   TestList
-    [ "fromList empty" ~: ftEmpty ~?= FingerTree.fromList [],
-      "fromList 1" ~: ft1 ~?= FingerTree.fromList [1],
-      "fromList 2" ~: FingerTree.toList ft2 ~?= toList (FingerTree.fromList [1, 2]),
-      "fromList 3" ~: FingerTree.toList ft3 ~?= toList (FingerTree.fromList [1, 2, 3]),
-      "fromList 4" ~: FingerTree.toList ft4 ~?= toList (FingerTree.fromList [1, 2, 3, 4]),
-      "fromList 5" ~: FingerTree.toList ft5 ~?= toList (FingerTree.fromList [1, 2, 3, 4, 5]),
-      "fromList 6" ~: FingerTree.toList ft6 ~?= toList (FingerTree.fromList [1, 2, 3, 4, 5, 6]),
-      "fromList 7" ~: FingerTree.toList ft7 ~?= toList (FingerTree.fromList [1, 2, 3, 4, 5, 6, 7]),
-      "fromList 8" ~: FingerTree.toList ft8 ~?= toList (FingerTree.fromList [1, 2, 3, 4, 5, 6, 7, 8]),
-      "fromList 9" ~: FingerTree.toList ft9 ~?= toList (FingerTree.fromList [1, 2, 3, 4, 5, 6, 7, 8, 9])
+    [ "fromList empty" ~: ftEmpty ~?= FT.fromList [],
+      "fromList 1" ~: ft1 ~?= FT.fromList [1],
+      "fromList 2" ~: FT.toList ft2
+        ~?= FT.toList (FT.fromList [1, 2]),
+      "fromList 3" ~: FT.toList ft3
+        ~?= FT.toList (FT.fromList [1, 2, 3]),
+      "fromList 4" ~: FT.toList ft4
+        ~?= FT.toList (FT.fromList [1, 2, 3, 4]),
+      "fromList 5" ~: FT.toList ft5
+        ~?= FT.toList (FT.fromList [1, 2, 3, 4, 5]),
+      "fromList 6" ~: FT.toList ft6
+        ~?= FT.toList (FT.fromList [1, 2, 3, 4, 5, 6]),
+      "fromList 7" ~: FT.toList ft7
+        ~?= FT.toList (FT.fromList [1, 2, 3, 4, 5, 6, 7]),
+      "fromList 8" ~: FT.toList ft8
+        ~?= FT.toList (FT.fromList [1, 2, 3, 4, 5, 6, 7, 8]),
+      "fromList 9" ~: FT.toList ft9
+        ~?= FT.toList (FT.fromList [1, 2, 3, 4, 5, 6, 7, 8, 9])
     ]
 
 tLength :: Test
 tLength =
   TestList
-    [ "Length empty" ~: FingerTree.measure ftEmpty ~?= 0,
-      "Length 1" ~: FingerTree.measure ft1 ~?= 1,
-      "Length 2" ~: FingerTree.measure ft2 ~?= 2,
-      "Length 3" ~: FingerTree.measure ft3 ~?= 3,
-      "Length 4" ~: FingerTree.measure ft4 ~?= 4,
-      "Length 5" ~: FingerTree.measure ft5 ~?= 5,
-      "Length 6" ~: FingerTree.measure ft6 ~?= 6,
-      "Length 7" ~: FingerTree.measure ft7 ~?= 7,
-      "Length 8" ~: FingerTree.measure ft8 ~?= 8,
-      "Length 9" ~: FingerTree.measure ft9 ~?= 9
+    [ "Length empty" ~: FT.measure ftEmpty ~?= 0,
+      "Length 1" ~: FT.measure ft1 ~?= 1,
+      "Length 2" ~: FT.measure ft2 ~?= 2,
+      "Length 3" ~: FT.measure ft3 ~?= 3,
+      "Length 4" ~: FT.measure ft4 ~?= 4,
+      "Length 5" ~: FT.measure ft5 ~?= 5,
+      "Length 6" ~: FT.measure ft6 ~?= 6,
+      "Length 7" ~: FT.measure ft7 ~?= 7,
+      "Length 8" ~: FT.measure ft8 ~?= 8,
+      "Length 9" ~: FT.measure ft9 ~?= 9
     ]
 
--- tContains :: Test
--- tContains =
---   TestList
---     [ "Contains empty false" ~: contains ftEmpty 0 ~?= False,
---       "Contains 1 element true" ~: contains ft1 1 ~?= True,
---       "Contains 1 element false" ~: contains ft1 2 ~?= False,
---       "Contains many elements (head case)" ~: contains ft9 1 ~?= True,
---       "Contains many elements (tail case)" ~: contains ft9 9 ~?= True,
---       "Contains many elements (middle case 1)" ~: contains ft9 4 ~?= True,
---       "Contains many elements (middle case 1)" ~: contains ft9 5 ~?= True,
---       "Contains many elements FALSE" ~: contains ft9 5 ~?= False
---     ]
 --------------- QuickCheck Properties ---------------
 
--- Invariant/Validity Properties? (we don't think there are any as opposed to avl)
-
--- (1) PostCondition Properties
+-- (1) PostCondition (Invariants) Properties
 
 qcPostConditions :: IO ()
 qcPostConditions = qc1 >> qc2 >> qc3 >> qc4 >> qc5 >> qc6 >> qc7
 
 -- a. insertHead
-prop_insertHeadHead :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
+prop_insertHeadHead :: FT.Measured a => Eq a => FT.FingerTree a -> a -> Bool
 prop_insertHeadHead t x =
   let newTree = insertHead x t
-   in case FingerTree.head newTree of
+   in case FT.head newTree of
         Nothing -> False
         Just v -> v == x
 
-prop_insertHeadFirst :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
+prop_insertHeadFirst :: FT.Measured a => Eq a => FT.FingerTree a -> a -> Bool
 prop_insertHeadFirst t x =
   let newTree = insertHead x t
-   in Prelude.head (toList newTree) == x
+   in Prelude.head (FT.toList newTree) == x
 
 -- b. insert tail
-prop_insertTailTail :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
+prop_insertTailTail :: FT.Measured a => Eq a => FT.FingerTree a -> a -> Bool
 prop_insertTailTail t x =
   let newTree = insertTail x t
-   in case FingerTree.last newTree of
+   in case FT.last newTree of
         Nothing -> False
         Just v -> v == x
 
-prop_insertTailLast :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
+prop_insertTailLast :: FT.Measured a => Eq a => FT.FingerTree a -> a -> Bool
 prop_insertTailLast t x =
   let newTree = insertTail x t
-   in Prelude.last (toList newTree) == x
-
--- c. head
--- no postconditions
-
--- d. tail
--- no postconditions
+   in Prelude.last (FT.toList newTree) == x
 
 -- e. removeLast
-prop_removeTailChanged :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Bool
+prop_removeTailChanged :: FT.Measured a => Eq a => FT.FingerTree a -> Bool
 prop_removeTailChanged t =
   let newTree = removeLast t
    in case t of
         Nil -> newTree == t
         _ -> newTree /= t
 
--- f. isEmpty
--- no postconditions
-
 -- g. append
-prop_append :: Eq a => FingerTree.Measured a => FingerTree.FingerTree a -> FingerTree.FingerTree a -> Bool
+prop_append ::
+  Eq a =>
+  FT.Measured a =>
+  FT.FingerTree a ->
+  FT.FingerTree a ->
+  Bool
 prop_append t1 t2 =
   let t = append t1 t2
-   in FingerTree.head t1 == FingerTree.head t
-        && FingerTree.last t2 == FingerTree.last t
-        && toList t == toList t1 ++ toList t2
+   in FT.head t1 == FT.head t
+        && FT.last t2 == FT.last t
+        && FT.toList t == FT.toList t1 ++ FT.toList t2
 
 -- h. split
-prop_split :: FingerTree.Measured a => Eq a => Int -> FingerTree.FingerTree a -> Bool
+prop_split :: FT.Measured a => Eq a => Int -> FT.FingerTree a -> Bool
 prop_split x t =
-  let (t1, t2) = FingerTree.split x t
-   in FingerTree.head t == FingerTree.head t1
-        && FingerTree.last t == FingerTree.last t2
-
--- i. concat
--- prop_concat :: Eq a => [FingerTree.FingerTree a] -> Bool
--- prop_concat [] = True
--- prop_concat l =
---   let t = FingerTree.concat l
---    in FingerTree.head (Prelude.head l) == FingerTree.head t
---         && FingerTree.last (Prelude.last t) == FingerTree.last t
-
--- j. toList
--- no post-conditional properties
-
--- k. fromList
--- no post-conditions
-
--- m. length
--- no post-conditions
+  let (t1, t2) = FT.split x t
+   in (t1 == Nil || FT.head t == FT.head t1)
+        && (t2 == Nil || FT.last t == FT.last t2)
 
 qc1 :: IO ()
-qc1 = quickCheck (prop_insertHeadHead :: FingerTree.FingerTree Int -> Int -> Bool)
+qc1 = quickCheck (prop_insertHeadHead :: FT.FingerTree Int -> Int -> Bool)
 
 qc2 :: IO ()
-qc2  = quickCheck (prop_insertHeadFirst :: FingerTree.FingerTree Int -> Int -> Bool)
+qc2 = quickCheck (prop_insertHeadFirst :: FT.FingerTree Int -> Int -> Bool)
 
 qc3 :: IO ()
-qc3  = quickCheck (prop_insertTailTail :: FingerTree.FingerTree Int -> Int -> Bool)
+qc3 = quickCheck (prop_insertTailTail :: FT.FingerTree Int -> Int -> Bool)
 
 qc4 :: IO ()
-qc4  = quickCheck (prop_insertTailLast :: FingerTree.FingerTree Int -> Int -> Bool)
+qc4 = quickCheck (prop_insertTailLast :: FT.FingerTree Int -> Int -> Bool)
 
 qc5 :: IO ()
-qc5  = quickCheck (prop_removeTailChanged :: FingerTree.FingerTree Int -> Bool)
+qc5 = quickCheck (prop_removeTailChanged :: FT.FingerTree Int -> Bool)
 
 qc6 :: IO ()
-qc6  = quickCheck (prop_append :: FingerTree.FingerTree Int -> FingerTree.FingerTree Int -> Bool)
+qc6 =
+  quickCheck (prop_append :: FT.FingerTree Int -> FT.FingerTree Int -> Bool)
 
 qc7 :: IO ()
-qc7  = quickCheck (prop_split :: Int -> FingerTree.FingerTree Int -> Bool)
+qc7 = quickCheck (prop_split :: Int -> FT.FingerTree Int -> Bool)
 
 -- (2) Metamorphic Properties (Bulk of the testing):
 
+qcMetamorphic :: IO ()
+qcMetamorphic = qc8 >> qc9 >> qc10 >> qc11 >> qc12 >> qc13
+
 -- a.  insert at tail and then remove tail, should be previous tail
-prop_insertRemoveTail :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
+prop_insertRemoveTail :: FT.Measured a => Eq a => FT.FingerTree a -> a -> Bool
 prop_insertRemoveTail t x =
   let t' = removeLast (insertTail x t)
-   in FingerTree.last t == FingerTree.last t'
+   in FT.last t == FT.last t'
 
 -- b. insert at tail twice and then remove tail, tails should be second tail
-prop_insertTwice :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> a -> Bool
+prop_insertTwice :: FT.Measured a => Eq a => FT.FingerTree a -> a -> a -> Bool
 prop_insertTwice t x y =
   let t' = removeLast (insertTail y (insertTail x t))
-   in FingerTree.last t' == Just x
+   in FT.last t' == Just x
 
 -- c. insert twice and then remove to check that they are still there
-prop_insertRemoveTwice :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> a -> Bool
+prop_insertRemoveTwice ::
+  FT.Measured a => Eq a => FT.FingerTree a -> a -> a -> Bool
 prop_insertRemoveTwice t x y =
   let t' = removeLast (removeLast (insertTail y (insertTail x t)))
-   in FingerTree.last t' == FingerTree.last t
+   in FT.last t' == FT.last t
 
 -- d. isempty -> insert -> should no longer be empty
-prop_isEmptyInsert :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
+prop_isEmptyInsert ::
+  FT.Measured a => Eq a => FT.FingerTree a -> a -> Bool
 prop_isEmptyInsert t x = not (isEmpty (insertHead x t))
 
 -- e. insert head, insert tail and append trees
-prop_insertAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> FingerTree.FingerTree a -> a -> a -> Bool
+prop_insertAppend ::
+  FT.Measured a => Eq a => FT.FingerTree a -> FT.FingerTree a -> a -> a -> Bool
 prop_insertAppend t1 t2 x1 x2 =
   let t1' = insertHead x1 t1
    in let t2' = insertTail x2 t2
        in let t' = append t1' t2'
-           in FingerTree.head t' == FingerTree.head t1'
-                && FingerTree.last t' == FingerTree.last t2'
-                && toList t' == toList t1' ++ toList t2'
+           in FT.head t' == FT.head t1'
+                && FT.last t' == FT.last t2'
+                && FT.toList t' == FT.toList t1' ++ FT.toList t2'
 
--- Added this:
-prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
-prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
-  t == append t1 t2
+-- f. append after splitting
+prop_SplitAppend :: FT.Measured a => Eq a => FT.FingerTree a -> Int -> Bool
+prop_SplitAppend t x =
+  let (t1, t2) = FT.split x t
+   in FT.toList t == FT.toList (append t1 t2)
 
--- TODO: Add a metamorphic test (at leat one) for split:
--- f. append then split (and vice-versa) -- should end up with what you started
--- g. insert and remove before splitting
--- h. insert and remove after splitting (and then append?) (like adding element in particular spot)
+qc8 :: IO ()
+qc8 = quickCheck (prop_insertRemoveTail :: FT.FingerTree Int -> Int -> Bool)
+
+qc9 :: IO ()
+qc9 = quickCheck (prop_insertTwice :: FT.FingerTree Int -> Int -> Int -> Bool)
+
+qc10 :: IO ()
+qc10 =
+  quickCheck (prop_insertRemoveTwice :: FT.FingerTree Int -> Int -> Int -> Bool)
+
+qc11 :: IO ()
+qc11 = quickCheck (prop_isEmptyInsert :: FT.FingerTree Int -> Int -> Bool)
+
+qc12 :: IO ()
+qc12 =
+  quickCheck
+    ( prop_insertAppend ::
+        FT.FingerTree Int -> FT.FingerTree Int -> Int -> Int -> Bool
+    )
+
+qc13 :: IO ()
+qc13 = quickCheck (prop_SplitAppend :: FT.FingerTree Int -> Int -> Bool)
 
 -- (3) Model-Based Poperties (could just use lists for now?)
-prop_modelInsertHead :: FingerTree.Measured a => Eq a => [a] -> Bool
+
+qcModel :: IO ()
+qcModel = qc14 >> qc15 >> qc16 >> qc17 >> qc18 >> qc19 >> qc20 >> qc21
+
+prop_modelInsertHead :: FT.Measured a => Eq a => [a] -> Bool
 prop_modelInsertHead l =
   let myTree = foldr insertHead Nil l
    in let modelTree = l
-       in FingerTree.toList myTree == modelTree
+       in FT.toList myTree == modelTree
 
-prop_modelInsertTail :: FingerTree.Measured a => Eq a => [a] -> Bool
+prop_modelInsertTail :: FT.Measured a => Eq a => [a] -> Bool
 prop_modelInsertTail l =
-  let myTree = foldr insertTail Nil l
+  let myTree = foldl (flip insertTail) Nil l
    in let modelTree = l
-       in FingerTree.toList myTree == modelTree
+       in FT.toList myTree == modelTree
 
-prop_modelFromListHead :: FingerTree.Measured a => Eq a => [a] -> Bool
+prop_modelFromListHead :: FT.Measured a => Eq a => [a] -> Bool
 prop_modelFromListHead l =
-  let myTree = FingerTree.fromList l
+  let myTree = FT.fromList l
    in let modelTree = l
-       in FingerTree.head myTree == getFirst modelTree
+       in FT.head myTree == getFirst modelTree
 
-prop_modelFromListTail :: FingerTree.Measured a => Eq a => [a] -> Bool
+prop_modelFromListTail :: FT.Measured a => Eq a => [a] -> Bool
 prop_modelFromListTail l =
-  let myTree = FingerTree.fromList l
+  let myTree = FT.fromList l
    in let modelTree = l
-       in FingerTree.last myTree == getLast modelTree
+       in FT.last myTree == getLast modelTree
 
 getFirst :: [a] -> Maybe a
 getFirst (x : xs) = Just x
@@ -544,159 +634,271 @@ getLast [x] = Just x
 getLast (x : xs) = getLast xs
 getLast [] = Nothing
 
-prop_modelFromListEveryElement :: FingerTree.Measured a => Eq a => [a] -> Bool
+prop_modelFromListEveryElement :: FT.Measured a => Eq a => [a] -> Bool
 prop_modelFromListEveryElement l =
-  let myTree = FingerTree.fromList l
+  let myTree = FT.fromList l
    in let modelTree = l
-       in toList myTree == modelTree
+       in FT.toList myTree == modelTree
 
-prop_modelFromListEveryElementAppend :: FingerTree.Measured a => Eq a => [a] -> [a] -> Bool
+prop_modelFromListEveryElementAppend :: 
+ FT.Measured a => Eq a => [a] -> [a] -> Bool
 prop_modelFromListEveryElementAppend l1 l2 =
-  let myTree = append (FingerTree.fromList l1) (FingerTree.fromList l2)
+  let myTree = append (FT.fromList l1) (FT.fromList l2)
    in let modelTree = l1 ++ l2
-       in toList myTree == modelTree
+       in FT.toList myTree == modelTree
 
--- ADDED THIS STUFF:
-prop_modelSplit :: FingerTree.Measured a => Eq a => Int -> [a] -> Bool
-prop_modelSplit x l = 
-  let t = FingerTree.fromList l in
-    let (t1, t2) = FingerTree.split x t  in
-      toList t1 == take x l && toList t2 == drop x l
+prop_modelSplit :: FT.Measured a => Eq a => Int -> [a] -> Bool
+prop_modelSplit x l =
+  let t = FT.fromList l
+   in let (t1, t2) = FT.split x t
+       in if x >= 0
+            then FT.toList t1 == take x l && FT.toList t2 == drop x l
+            else FT.toList t1 == drop x l && FT.toList t2 == take x l
 
--- TODO: want a model based quick check property for split
+prop_modelAppend :: FT.FingerTree Int -> FT.FingerTree Int -> Bool
+prop_modelAppend t1 t2 = 
+  FT.toList (FT.append t1 t2) == FT.toList t1 ++ FT.toList t2
 
--- TODO: add all the unit tests and quickCheck properties for the type class instances of fingerTree.FingerTree
+qc14 :: IO ()
+qc14 = quickCheck (prop_modelInsertHead :: [Int] -> Bool)
 
--- prop_length :: FingerTree.FingerTree Int -> Bool
--- prop_length ft = Maybe.isJust (count ft)
---   where
---     count Nil = Just 0
---     count (Unit _) = Just 1
---     count (More _ l ft r) = undefined -- count each and add
+qc15 :: IO ()
+qc15 = quickCheck (prop_modelInsertTail :: [Int] -> Bool)
 
-prop_append2 :: FingerTree.FingerTree Int -> FingerTree.FingerTree Int -> Bool
-prop_append2 t1 t2 = toList (t1 <> t2) == toList t1 ++ toList t2
+qc16 :: IO ()
+qc16 = quickCheck (prop_modelFromListHead :: [Int] -> Bool)
 
--- prop_fMapId :: (Eq (f a), Functor f) => f a -> Bool
--- prop_fMapId t = fmap' id t == id t
+qc17 :: IO ()
+qc17 = quickCheck (prop_modelFromListTail :: [Int] -> Bool)
 
--- prop_FMapComp :: (Eq (f c), Functor f) => Fun b c -> Fun a b -> f a -> Bool
--- prop_FMapComp (Fun _ f) (Fun _ g) x =
---   fmap (f . g) x == (fmap f . fmap g) x
+qc18 :: IO ()
+qc18 = quickCheck (prop_modelFromListEveryElement :: [Int] -> Bool)
 
--- prop_LeftUnit :: (Eq (m b), Monad m) => a -> Fun a (m b) -> Bool
--- prop_LeftUnit x (Fun _ f) =
---   (return x >>= f) == f x
+qc19 :: IO ()
+qc19 = 
+  quickCheck (prop_modelFromListEveryElementAppend :: [Int] -> [Int] -> Bool)
 
--- prop_RightUnit :: (Eq (m b), Monad m) => m b -> Bool
--- prop_RightUnit m =
---   (m >>= return) == m
+qc20 :: IO ()
+qc20 = quickCheck (prop_modelSplit :: Int -> [Int] -> Bool)
 
--- prop_Assoc ::
---   (Eq (m c), Monad m) =>
---   m a ->
---   Fun a (m b) ->
---   Fun b (m c) ->
---   Bool
--- prop_Assoc m (Fun _ f) (Fun _ g) =
---   ((m >>= f) >>= g) == (m >>= f x >=> g)
-
--- prop_FunctorMonad :: (Eq (m b), Monad m) => m a -> Fun a b -> Bool
--- prop_FunctorMonad x (Fun _ f) = fmap f x == (f <$> x)
-
--- qc1 :: IO ()
--- qc1 = quickCheck (prop_fMapId :: FingerTree.FingerTree Int -> Bool)
-
--- qc2 :: IO ()
--- qc2 =
---   quickCheck
---     (prop_FMapComp :: Fun Int Int -> Fun Int Int -> FingerTree.FingerTree Int -> Bool)
-
--- qc3 :: IO ()
--- qc3 = quickCheck (prop_LeftUnit :: Int -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- qc4 :: IO ()
--- qc4 = quickCheck (prop_RightUnit :: FingerTree.FingerTree Int -> Bool)
-
--- warning, this one is slower than the rest.
--- It takes 10-15 seconds on my machine.
--- qc5 :: IO ()
--- qc5 =
---   quickCheck
---     (prop_Assoc :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- qc6 :: IO ()
--- qc6 = quickCheck (prop_FunctorMonad :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- qc7 :: IO ()
--- qc7 = quickCheck (prop_qc7 :: FingerTree.FingerTree Int -> Fun Int Int -> Bool)
-
--- prop_qc7 :: (Eq b) => FingerTree.FingerTree a -> Fun a b -> Bool
--- prop_qc7 s (Fun _ f) = toList (fmap f s) == fmap f (toList s)
-
--- qc8 :: IO ()
--- qc8 = quickCheck (prop_qc8 :: Int -> Bool)
-
--- prop_qc8 :: (Eq a) => a -> Bool
--- prop_qc8 (x :: a) = toList (return x :: FingerTree.FingerTree a) == return x
-
--- qc9 :: IO ()
--- qc9 = quickCheck (prop_qc9 :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- prop_qc9 :: (Eq b) => FingerTree.FingerTree a -> Fun a (FingerTree.FingerTree b) -> Bool
--- prop_qc9 m (Fun _ k) = toList (m >>= k) == (toList m >>= (toList . k))
-
--- qc10 :: IO ()
--- qc10 = quickCheck prop_FingerTree.FingerTree_functor
---   where
---     prop_FingerTree.FingerTree_functor :: Fun Int Int -> FingerTree.FingerTree Int -> Property
---     prop_FingerTree.FingerTree_functor (Fun _ f) x = prop_AVL (fmap f x)
-
--- qc11 :: IO ()
--- qc11 = quickCheck prop_FingerTree.FingerTree_return
---   where
---     prop_FingerTree.FingerTree_return :: Int -> Property
---     prop_FingerTree.FingerTree_return x = prop_AVL (return x)
-
--- qc12 :: IO ()
--- qc12 = quickCheck prop_FingerTree.FingerTree_bind
---   where
---     prop_FingerTree.FingerTree_bind :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Property
---     prop_FingerTree.FingerTree_bind x (Fun _ k) = prop_AVL (x >>= k)
+qc21 :: IO ()
+qc21 = 
+  quickCheck (prop_modelAppend :: 
+  FT.FingerTree Int -> FT.FingerTree Int -> Bool
+  )
 
 qcFingerTree :: IO ()
 qcFingerTree = putStrLn "I am in Missouri"
 
--- qc1 >> qc2 >>
--- qc3 >> qc4
--- >> qc5
--- >> qc6
--- >> qc7
+--------------- Sequence Tsts --------- ------
 
--- >> qc8
--- >> qc9
+seqEmpty :: Sequence Int
+seqEmpty = Sequence.empty
 
--- >> qc10
--- >> qc11
--- >> qc12
+seq1 :: Sequence Int
+seq1 = Sequence.singleton 1
 
+seq2 :: Sequence Int
+seq2 = seq1 Sequence.|> 2
 
-<<<<<<< HEAD
--- Added this:
-prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
-prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
-  t == append t1 t2
-=======
+seq3 :: Sequence Int
+seq3 = seq2 Sequence.|> 3
 
--- Added this:
--- prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
--- prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
---   t == append t1 t2
->>>>>>> 7e00434816ccc7df7854d83d2f9e36979dd99231
+seq4 :: Sequence Int
+seq4 = seq3 Sequence.|> 4
 
--- -- ADDED THIS STUFF:
--- prop_modelSplit :: FingerTree.Measured a => Eq a => Int -> [a] -> Bool
--- prop_modelSplit x l = 
---   let t = FingerTree.fromList l in
---     let (t1, t2) = FingerTree.split x t  in
---       toList t1 == take x l && toList t2 == drop x l
+seq5 :: Sequence Int
+seq5 = seq4 Sequence.|> 5
+
+tSeqUnit :: Test
+tSeqUnit =
+  TestList
+    [ "Seq empty" ~: Sequence.toList seqEmpty ~?= [],
+      "Seq 1" ~: Sequence.toList seq1 ~?= [1],
+      "Seq 2" ~: Sequence.toList seq2 ~?= [1, 2],
+      "Seq 3" ~: Sequence.toList seq3 ~?= [1, 2, 3],
+      "Seq 4" ~: Sequence.toList seq4 ~?= [1, 2, 3, 4],
+      "Seq 4" ~: Sequence.toList seq5 ~?= [1, 2, 3, 4, 5]
+    ]
+
+qcSequence :: IO ()
+qcSequence =
+  quickCheck prop_postConditionDeleteAt
+    >> quickCheck prop_postConditionInsertHead
+    >> quickCheck prop_postConditionInsertHead
+    >> quickCheck prop_InsertAtLookUp
+    >> quickCheck prop_deleteAtLookUp
+    >> quickCheck prop_seqAppend
+    >> quickCheck prop_seqToFromList
+
+-- QuickCheck PostCondition Properties:
+prop_postConditionDeleteAt :: Sequence Int -> Int -> Bool
+prop_postConditionDeleteAt s i =
+  let oldSize = Sequence.length s
+   in let newSize = Sequence.length (Sequence.deleteAt i s)
+       in if i >= 0 && i < Sequence.length s
+            then (oldSize - 1) == newSize
+            else oldSize == Sequence.length s
+
+prop_postConditionInsertHead :: Sequence Int -> Int -> Bool
+prop_postConditionInsertHead s x =
+  let s1 = x Sequence.<| s
+   in first s1 == Just x
+
+prop_postConditionInsertTail :: Sequence Int -> Int -> Bool
+prop_postConditionInsertTail s x =
+  let s2 = s Sequence.|> x
+   in first s2 == Just x
+
+-- QuickCheck Metamorphic Properties:
+
+deleteAt :: Int -> [a] -> [a]
+deleteAt idx xs =
+  if idx < 0
+    then xs
+    else lft ++ rgt
+  where
+    (lft, rgt) = case splitAt idx xs of
+      (y, []) -> (y, [])
+      (y, _ : xs) -> (y, xs)
+
+insertAt :: Int -> a -> [a] -> [a]
+insertAt idx elt xs = lft ++ (elt : rgt)
+  where
+    (lft, rgt) = splitAt idx xs
+
+prop_InsertAtLookUp :: Sequence Int -> Int -> Int -> Bool
+prop_InsertAtLookUp s i x =
+  let s1 = Sequence.insertAt i x s
+   in if i == 0 || (i > 0 && i <= Sequence.length s)
+        then Sequence.lookup i s1 == Just x
+        else isNothing (Sequence.lookup i s1)
+
+prop_deleteAtLookUp :: [Int] -> Int -> Bool
+prop_deleteAtLookUp l i =
+  let s = Sequence.fromList l
+   in let s1 = Sequence.deleteAt i s
+       in Sequence.toList s1 == Main.deleteAt i l
+
+prop_seqAppend :: Sequence Int -> Sequence Int -> Bool
+prop_seqAppend s1 s2 =
+  let s = s1 Sequence.<> s2
+   in Sequence.toList s == Sequence.toList s1 ++ Sequence.toList s2
+
+prop_seqToFromList :: [Int] -> Bool
+prop_seqToFromList l =
+  let s = Sequence.fromList l
+   in Sequence.toList s == l
+
+----------- Priority Queue Tests -----------
+
+pqEmpty :: PriorityQueue Int
+pqEmpty = PQ.empty
+
+pq1 :: PriorityQueue Int
+pq1 = PQ.singleton 1
+
+pq2 :: PriorityQueue Int
+pq2 = enqueue 2 pq1
+
+pq3 :: PriorityQueue Int
+pq3 = enqueue 3 pq2
+
+pq4 :: PriorityQueue Int
+pq4 = enqueue 4 pq3
+
+pq5 :: PriorityQueue Int
+pq5 = enqueue 5 pq4
+
+pqUnordered :: PriorityQueue Int
+pqUnordered = PQ.fromList [1, 5, 2, 6, 3, 4, 5]
+
+tPQUnit :: Test
+tPQUnit =
+  TestList
+    [ "PQ empty" ~: fst (PQ.extractMax pqEmpty) ~?= Nothing,
+      "PQ 1" ~: fst (PQ.extractMax pq1) ~?= Just 1,
+      "PQ 2" ~: fst (PQ.extractMax pq2) ~?= Just 2,
+      "PQ 3" ~: fst (PQ.extractMax pq3) ~?= Just 3,
+      "PQ 4" ~: fst (PQ.extractMax pq4) ~?= Just 4,
+      "PQ 5" ~: fst (PQ.extractMax pq5) ~?= Just 5
+    ]
+
+qcPQ :: IO ()
+qcPQ =
+  quickCheck prop_enqueue
+    >> quickCheck prop_extractMax
+    >> quickCheck prop_Size
+    >> quickCheck prop_enqueuePeek
+    >> quickCheck prop_enqueuePeek2
+    >> quickCheck prop_enqueueSize
+    >> quickCheck prop_extractMaxSize
+    >> quickCheck prop_extractMaxPeekMax
+    >> quickCheck prop_extractMaxEnqueuePeekMax
+
+-- QuickCheck PostCondition/Model-based Properties:
+prop_enqueue :: Ord a => PriorityQueue a -> a -> Bool
+prop_enqueue pq x =
+  let oldSize = size pq
+   in oldSize + 1 == size (enqueue x pq)
+
+prop_extractMax :: Ord a => PriorityQueue a -> Bool
+prop_extractMax pq =
+  let max = peekMax pq
+   in let (max', _) = extractMax pq
+       in max' == max
+
+prop_Size :: Ord a => PriorityQueue a -> Bool
+prop_Size pq =
+  let size = PQ.size pq
+   in size == Prelude.length (PQ.toList pq)
+
+-- QuickCheck Metamorphic Properties:
+prop_enqueuePeek :: PriorityQueue Int -> Bool
+prop_enqueuePeek pq =
+  let oldMax = peekMax pq
+   in let newMax = case oldMax of
+            Nothing -> 10
+            Just v -> v + 1
+       in let newPQ = enqueue newMax pq
+           in peekMax newPQ == Just newMax
+
+prop_enqueuePeek2 :: PriorityQueue Int -> Bool
+prop_enqueuePeek2 pq =
+  let oldMax = peekMax pq
+   in let newMax = case oldMax of
+            Nothing -> 10
+            Just v -> v - 1
+       in let newPQ = enqueue newMax pq
+           in if isNothing oldMax 
+             then peekMax newPQ == Just 10 
+             else peekMax newPQ == oldMax
+
+prop_enqueueSize :: Ord a => PriorityQueue a -> a -> Bool
+prop_enqueueSize pq x =
+  let oldSize = size pq
+   in oldSize + 1 == size (enqueue x pq)
+
+prop_extractMaxSize :: Ord a => PriorityQueue a -> Bool
+prop_extractMaxSize pq =
+  let oldSize = size pq
+   in let (_, pq') = extractMax pq
+       in (oldSize == 0) || (oldSize - 1 == size pq')
+
+prop_extractMaxPeekMax :: Ord a => PriorityQueue a -> Bool
+prop_extractMaxPeekMax pq =
+  let oldMax = peekMax pq
+   in case oldMax of
+        Nothing -> peekMax pq == oldMax
+        Just v ->
+          let (_, pq') = extractMax pq
+           in case peekMax pq' of
+                Nothing -> True
+                Just b -> v >= b
+
+prop_extractMaxEnqueuePeekMax :: Ord a => PriorityQueue a -> Bool
+prop_extractMaxEnqueuePeekMax pq =
+  let (oldMax, pq') = extractMax pq
+   in case oldMax of
+        Nothing -> peekMax pq == oldMax
+        Just v -> peekMax (enqueue v pq') == oldMax

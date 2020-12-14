@@ -1,7 +1,21 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
-module PriorityQueue where
+module PriorityQueue
+  ( PriorityQueue,
+    extractMax,
+    PriorityQueue.fmap',
+    PriorityQueue.empty,
+    singleton,
+    size,
+    peekMax,
+    enqueue,
+    PriorityQueue.fromList,
+    PriorityQueue.toList,
+  )
+where
 
 import Control.Applicative
 import Control.Monad
@@ -10,9 +24,93 @@ import Data.Functor
 import Data.Monoid
 import Data.Semigroup
 import Data.Traversable
-import FingerTree as FT
+import FingerTree2 as FT
+import Test.QuickCheck
 
-newtype PriorityQueue a = PQ (FingerTree a)
+newtype PriorityQueue a = PQ (FingerTree (Prio a) (Elem a))
+  deriving (Show, Eq)
+
+newtype Elem a = Elem {getElem :: a}
+  deriving (Show, Eq)
+
+instance Ord a => Measured (Prio a) (Elem a) where
+  measure (Elem x) = Prio x
+
+data Prio a
+  = MinInfty
+  | Prio a
+  deriving (Eq, Ord, Show)
+
+instance (Ord a) => Monoid (Prio a) where
+  mempty = MinInfty
+  mappend = (<>)
+
+instance (Ord a) => Semigroup (Prio a) where
+  MinInfty <> y = y
+  x <> MinInfty = x
+  x <> y = max x y
+
+extractMax :: (Ord a) => PriorityQueue a -> (Maybe a, PriorityQueue a)
+extractMax pq@(PQ Nil) = (Nothing, pq)
+extractMax (PQ ft) = (Just x, PQ (append l r))
+  where
+    Split l (Elem x) r = splitTree (measure ft <=) mempty ft
+
+fmap' :: (Ord a, Ord b) => (a -> b) -> PriorityQueue a -> PriorityQueue b
+fmap' f (PQ t) = PQ (FT.fmap' (\(Elem x) -> Elem (f x)) t)
+
+-- Old implementation functions, translated to FingerTree2
+empty :: PriorityQueue a
+empty = PQ Nil
+
+singleton :: a -> PriorityQueue a
+singleton = PQ . Unit . Elem
+
+size :: PriorityQueue a -> Int
+size (PQ t) = length t
+
+peekMax :: Ord a => PriorityQueue a -> Maybe a
+peekMax = fst . extractMax
+
+enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
+enqueue x (PQ t) = PQ $ insertHead (Elem x) t
+
+fromList :: Ord a => [a] -> PriorityQueue a
+fromList = foldr enqueue PriorityQueue.empty
+
+toList :: Ord a => PriorityQueue a -> [a]
+toList (PQ t) = fmap getElem (FT.toList t)
+
+instance (Arbitrary a) => Arbitrary (Elem a) where
+  arbitrary = fmap Elem arbitrary
+
+instance (Ord a, Show a, Arbitrary a) => Arbitrary (PriorityQueue a) where
+  arbitrary = fmap PQ FT.arbitrary
+
+  shrink :: (Show a, Arbitrary a) => PriorityQueue a -> [PriorityQueue a]
+  shrink (PQ t) = fmap PQ (FT.shrink t)
+
+-- Ord constraint required, which violates type signature of fmap
+-- instance Functor PriorityQueue where
+--   fmap :: (a -> b) -> PriorityQueue a -> PriorityQueue b
+--   fmap f (PQ t) = PQ (FT.fmap' (\(Elem x) -> Elem (f x)) t)
+
+-- Functor needed for Applicative
+-- instance Applicative PriorityQueue where
+--   pure :: a -> PriorityQueue a
+--   pure x = PQ $ Unit $ Elem x
+
+--   (<*>) :: PriorityQueue (a -> b) -> PriorityQueue a -> PriorityQueue b
+--   (<*>) = undefined
+-- t1 <*> t2 = FingerTree . (<*>)
+
+-- toList :: (Ord a, Measured c (FingerTree c a)) => PriorityQueue a -> [a]
+-- toList (PQ ft) = FT.toList $ FT.fmap' getElem ft
+
+-- union :: Ord a => PriorityQueue a -> PriorityQueue a -> PriorityQueue a
+-- union = flip enqueue
+
+-- OLD IMPL BELOW - from pre-FingerTree2 times
 
 -- Invariants:
 -- a must be instance of Ord
@@ -46,12 +144,12 @@ newtype PriorityQueue a = PQ (FingerTree a)
 --   (<*>) :: PriorityQueue (a -> b) -> PriorityQueue a -> PriorityQueue b
 --   t1 <*> t2 = FingerTree . (<*>)
 
-instance Measured a => Monoid (PriorityQueue a) where
-  mempty :: PriorityQueue a
-  mempty = PQ Nil
+-- instance Measured a => Monoid (PriorityQueue a) where
+--   mempty :: PriorityQueue a
+--   mempty = PQ Nil
 
-instance Measured a => Semigroup (PriorityQueue a) where
-  (PQ t1) <> (PQ t2) = PQ ((<>) t1 t2)
+-- instance Measured a => Semigroup (PriorityQueue a) where
+--   (PQ t1) <> (PQ t2) = PQ ((<>) t1 t2)
 
 -- instance Foldable PriorityQueue where
 --   foldMap :: Monoid m => (a -> m) -> PriorityQueue a -> m
@@ -66,26 +164,26 @@ instance Measured a => Semigroup (PriorityQueue a) where
 
 ------ Functions ------
 
-empty :: PriorityQueue a
-empty = PQ Nil
+-- empty :: PriorityQueue a
+-- empty = PQ Nil
 
-singleton :: Measured a => Ord a => a -> PriorityQueue a
-singleton = PQ . Unit
+-- singleton :: Measured a => Ord a => a -> PriorityQueue a
+-- singleton = PQ . Unit
 
-size :: Measured a => PriorityQueue a -> Int
-size (PQ t) = measure t
+-- size :: Measured a => PriorityQueue a -> Int
+-- size (PQ t) = measure t
 
-peekMax :: Measured a => PriorityQueue a -> Maybe a
-peekMax (PQ t) = FT.last t
+-- peekMax :: Measured a => PriorityQueue a -> Maybe a
+-- peekMax (PQ t) = FT.last t
 
-peekMin :: Measured a => PriorityQueue a -> Maybe a
-peekMin (PQ t) = FT.head t
+-- peekMin :: Measured a => PriorityQueue a -> Maybe a
+-- peekMin (PQ t) = FT.head t
 
-deleteMax :: Measured a => PriorityQueue a -> PriorityQueue a
-deleteMax (PQ t) = PQ (removeLast t)
+-- deleteMax :: Measured a => PriorityQueue a -> PriorityQueue a
+-- deleteMax (PQ t) = PQ (removeLast t)
 
-deleteMin :: Measured a => PriorityQueue a -> PriorityQueue a
-deleteMin (PQ t) = PQ $ FT.tail t
+-- deleteMin :: Measured a => PriorityQueue a -> PriorityQueue a
+-- deleteMin (PQ t) = PQ $ FT.tail t
 
 -- enqueue :: Ord a => a -> PriorityQueue a -> PriorityQueue a
 -- enqueue x (PQ t) =

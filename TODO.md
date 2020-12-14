@@ -1,23 +1,26 @@
 # FingerTree.hs
-- Implement all stubs
-- Add more functionalities from older paper
+- Clear out TODOs and comments
+- Reorganize methods to follow same order as FingerTree2
+- Add comments/headers matching FingerTree2
+
+# FingerTree2.hs
+- Add following methods from FingerTree:
+    - `arbitrarySizedTree` and `arbitrary` [DONE]
+    - `shrink` and shrink helpers [DONE]
 
 # PriorityQueue.hs
-- Implement all stubs
-- Refactor to eliminate max/min (single PQ is max and min, just choose which end to remove from)
+- Check that all required functions are implemented and exported [DONE]
 
 # Sequence.hs
-- Implement all stubs
+- Check that all required functions are implemented and exported [DONE]
 
 # Benchmark.hs
-- Implement benchmark suite from article in Stephanie's email
-- Benchmark FingerTree operations compared to List, Seq, (maybe other stuff too?)
+- Done?
 
 # Tests.hs
-- Fill in unit tests
-- Add QuickCheck properties that aren't from HW5
-    - Possibly make these test props of PQ and Sequence in addition to FingerTree
+- Fill in unit tests [DONE]
+- Add QuickCheck properties that aren't from HW5[DONE] 
+    - Possibly make these test props of PQ and [DONE] Sequence in addition to FingerTree[DONE] 
 
 # Application (Main.hs?)
-- Come up with heavily random-access use case that would benefit from FingerTrees
-- Implement said use case
+- Done?

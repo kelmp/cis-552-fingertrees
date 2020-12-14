@@ -1,8 +1,10 @@
 {-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
+{-# LANGUAGE InstanceSigs #-}
 
-module FingerTree 
+module FingerTree
   ( FingerTree (..),
     Some (..),
     Tuple (..),
@@ -26,30 +28,41 @@ module FingerTree
     toList,
     fromList,
     removeLast,
-    FingerTree.concat,
-    FingerTree.last) where
+    FingerTree.last,
+    fmap',
+    shrink,
+    arbitrary,
+  )
+where
 
 import Control.Applicative ()
+import Control.DeepSeq (NFData)
 import Control.Monad
 import Data.Foldable ()
 import Data.Functor ()
 import Data.Monoid ()
 import Data.Semigroup ()
 import Data.Traversable ()
-import Test.HUnit
+import GHC.Generics (Generic)
+import Test.HUnit ()
 import Test.QuickCheck
 import Prelude hiding ((!!))
--- (Arbitrary (arbitrary, shrink))
 
 default (Int)
 
+----------------
+-- DATA TYPES --
+----------------
+----------------
+-- FingerTree --
+----------------
 -- FingerTree is empty, a single element, or has elements on both sides
 -- w/ a Tuple FingerTree in the middle. Nested type has cached length
 data FingerTree a
   = Nil
   | Unit a
   | More Int (Some a) (FingerTree (Tuple a)) (Some a)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 -- Outside of a FingerTree. No length cached, since they are only the outermost
 -- type in the first layer of the tree
@@ -57,15 +70,18 @@ data Some a
   = One a
   | Two a a
   | Three a a a
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 -- Used in nested FingerTrees. Length is cached since they contain some unknown
 -- number of elements in lower layers
 data Tuple a
   = Pair Int a a
   | Triple Int a a a
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
+--------------
+-- Measured --
+--------------
 -- Allows for O(1) retrieval of length via cached values
 class Measured a where
   measure :: a -> Int
@@ -88,48 +104,73 @@ instance Measured (Tuple a) where
   measure (Pair l _ _) = l
   measure (Triple l _ _ _) = l
 
+----------------------
+-- Queue operations --
+----------------------
+insertHead :: Measured a => a -> FingerTree a -> FingerTree a
+insertHead a Nil = Unit a
+insertHead a (Unit b) = more (One a) Nil (One b)
+insertHead a (More _ (One b) ft r) = more (Two a b) ft r
+insertHead a (More _ (Two b c) ft r) = more (Three a b c) ft r
+insertHead a (More _ (Three b c d) ft r) =
+  more (Two a b) (insertHead (pair c d) ft) r
+
+insertTail :: Measured a => a -> FingerTree a -> FingerTree a
+insertTail z Nil = Unit z
+insertTail z (Unit a) = more (One a) Nil (One z)
+insertTail z (More _ l ft (One a)) = more l ft (Two a z)
+insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
+insertTail z (More _ l ft (Three a b c)) =
+  more l (insertTail (pair a b) ft) (Two c z)
+
+head :: FingerTree a -> Maybe a
+head Nil = Nothing
+head (Unit x) = Just x
+head (More _ (One x) _ _) = Just x
+head (More _ (Two x _) _ _) = Just x
+head (More _ (Three x _ _) _ _) = Just x
+
+last :: FingerTree a -> Maybe a
+last Nil = Nothing
+last (Unit x) = Just x
+last (More _ _ _ (One x)) = Just x
+last (More _ _ _ (Two _ x)) = Just x
+last (More _ _ _ (Three _ _ x)) = Just x
+
+------------------------
+-- Smart constructors --
+------------------------
+more :: Measured a => Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
+more l ft r = More (measure l + measure ft + measure r) l ft r
+
+pair :: Measured a => a -> a -> Tuple a
+pair a b = Pair (measure a + measure b) a b
+
+triple :: Measured a => a -> a -> a -> Tuple a
+triple a b c = Triple (measure a + measure b + measure c) a b c
+
+-----------
+-- Split --
+-----------
 -- Type returned by the split function and some of its helpers.
 data Split o a = Split o a o
   deriving (Eq, Show)
 
--- Splits a Some based on relative index. Returns Split with Some on the
--- outsides (wrapped in Maybe in case there aren't enough elements)
--- to build the outsides of FingerTrees post-split.
--- This is a helper for splitTree
-splitSome :: Measured a => Int -> Some a -> Split (Maybe (Some a)) a
-splitSome _ (One x) = Split Nothing x Nothing
-splitSome tgtI (Two x y)
-  | tgtI < measure x = Split Nothing x (Just (One y))
-  | otherwise = Split (Just (One x)) y Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y Nothing
-  -- | otherwise = Split Nothing x (Just (One y))
-splitSome tgtI (Three x y z)
-  | tgtI < measure x = Split Nothing x (Just (Two y z))
-  | tgtI < measure x + measure y =
-      Split (Just (One x)) y (Just (One z))
-  | otherwise = Split (Just (Two x y)) z Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y (Just (One z))
-  -- | tgtI == 2 = Split (Just (Two x y)) z Nothing
-  -- | otherwise = Split Nothing x (Just (Two y z))
+(!!) :: Measured a => FingerTree a -> Int -> Maybe a
+ft !! i = case snd $ split i ft of
+  Nil -> Nothing
+  Unit x -> Just x
+  More _ l _ _ -> Just $ snd $ someSeparateLast l
 
--- Splits a Tuple based on relative index. Returns Some on the outside
--- of the Split type (if possible) since the results are used for the
--- outer branches of new More type FingerTrees.
--- This is a helper for splitTree.
-splitTuple :: Measured a => Int -> Tuple a -> Split (Maybe (Some a)) a
-splitTuple tgtI (Pair _ x y)
-  | tgtI < measure x = Split Nothing x (Just (One y))
-  | otherwise = Split (Just (One x)) y Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y Nothing
-  -- | otherwise = Split Nothing x (Just (One y))
-splitTuple tgtI (Triple _ x y z)
-  | tgtI < measure x = Split Nothing x (Just (Two y z))
-  | tgtI < measure x + measure y =
-      Split (Just (One x)) y (Just (One z))
-  | otherwise = Split (Just (Two x y)) z Nothing
-  -- | tgtI == 1 = Split (Just (One x)) y (Just (One z))
-  -- | tgtI == 2 = Split (Just (Two x y)) z Nothing
-  -- | otherwise = Split Nothing x (Just (Two y z))
+-- Splits a FingerTree into two separate trees based on index.
+split :: Measured a => Int -> FingerTree a -> (FingerTree a, FingerTree a)
+split _ Nil = (Nil, Nil)
+split i ft =
+  if i >= 0 && i < measure ft
+    then
+      let Split l x r = splitTree i ft
+       in (l, insertHead x r)
+    else (ft, Nil)
 
 -- Split a tree, if possible. Because of the Split datatype requiring an
 -- element in the middle, it's not possible for Nil but will work in all
@@ -157,30 +198,57 @@ splitTree tgtI (More _ l ft r)
     startMiddle = measure l
     startRight = startMiddle + measure ft
 
--- Splits a FingerTree into two separate trees based on index.
-split :: Measured a => Int -> FingerTree a -> (FingerTree a, FingerTree a)
-split _ Nil = (Nil, Nil)
-split i ft =
-  if i >= 0 && i < measure ft
-    then
-      let Split l x r = splitTree i ft
-       in (l, insertHead x r)
-    else (ft, Nil)
+-- Splits a Some based on relative index. Returns Split with Some on the
+-- outsides (wrapped in Maybe in case there aren't enough elements)
+-- to build the outsides of FingerTrees post-split.
+-- This is a helper for splitTree
+splitSome :: Measured a => Int -> Some a -> Split (Maybe (Some a)) a
+splitSome _ (One x) = Split Nothing x Nothing
+splitSome tgtI (Two x y) = splitTwoOrPair tgtI x y
+splitSome tgtI (Three x y z) = splitThreeOrTriple tgtI x y z
 
-(!!) :: Measured a => FingerTree a -> Int -> Maybe a
-ft !! i = case snd $ split i ft of
-  Nil -> Nothing
-  Unit x -> Just x
-  More _ l _ _ -> Just $ snd $ someSeparateLast l
+-- Splits a Tuple based on relative index. Returns Some on the outside
+-- of the Split type (if possible) since the results are used for the
+-- outer branches of new More type FingerTrees.
+-- This is a helper for splitTree.
+splitTuple :: Measured a => Int -> Tuple a -> Split (Maybe (Some a)) a
+splitTuple tgtI (Pair _ x y) = splitTwoOrPair tgtI x y
+splitTuple tgtI (Triple _ x y z) = splitThreeOrTriple tgtI x y z
+
+splitTwoOrPair :: Measured a => Int -> a -> a -> Split (Maybe (Some a)) a
+splitTwoOrPair tgtI x y
+  | tgtI < measure x = Split Nothing x (Just (One y)) -- ((), x y)
+  | otherwise = Split (Just (One x)) y Nothing -- (x, y)
+
+splitThreeOrTriple ::
+  Measured a =>
+  Int ->
+  a ->
+  a ->
+  a ->
+  Split (Maybe (Some a)) a
+splitThreeOrTriple tgtI x y z
+  | tgtI < measure x = Split Nothing x (Just (Two y z)) -- ((), x y z)
+  | tgtI < measure x + measure y =
+    Split (Just (One x)) y (Just (One z)) -- (x, y z)
+  | otherwise = Split (Just (Two x y)) z Nothing -- (x y, z)
 
 -- split helpers
 -- splitTree needs deepL, deepR, and someToTree
-deepL :: Measured a => Maybe (Some a) -> FingerTree (Tuple a) -> Some a ->
+deepL ::
+  Measured a =>
+  Maybe (Some a) ->
+  FingerTree (Tuple a) ->
+  Some a ->
   FingerTree a
 deepL Nothing ft r = rotL ft r
 deepL (Just l) ft r = more l ft r
 
-deepR :: Measured a => Some a -> FingerTree (Tuple a) -> Maybe (Some a) ->
+deepR ::
+  Measured a =>
+  Some a ->
+  FingerTree (Tuple a) ->
+  Maybe (Some a) ->
   FingerTree a
 deepR l ft Nothing = rotR l ft
 deepR l ft (Just r) = more l ft r
@@ -231,9 +299,6 @@ tupleToSome :: Tuple a -> Some a
 tupleToSome (Pair _ a b) = Two a b
 tupleToSome (Triple _ a b c) = Three a b c
 
-more :: Measured a => Some a -> FingerTree (Tuple a) -> Some a -> FingerTree a
-more l ft r = More (measure l + measure ft + measure r) l ft r
-
 -- instance Monad FingerTree where
 --   return :: a -> FingerTree a
 --   return = Unit
@@ -249,7 +314,8 @@ more l ft r = More (measure l + measure ft + measure r) l ft r
 fmap' :: Measured a => Measured b => (a -> b) -> FingerTree a -> FingerTree b
 fmap' _ Nil = Nil
 fmap' f (Unit x) = Unit (f x)
-fmap' f (More _ l t r) = more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
+fmap' f (More _ l t r) =
+  more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
 
 fmapSome :: Measured a => Measured b => (a -> b) -> Some a -> Some b
 fmapSome f (One x) = One (f x)
@@ -297,9 +363,10 @@ instance Measured a => Semigroup (FingerTree a) where
 
 instance Foldable FingerTree where
   foldMap :: Monoid m => (a -> m) -> FingerTree a -> m
-  foldMap f Nil = mempty
+  foldMap _ Nil = mempty
   foldMap f (Unit x) = f x
-  foldMap f (More n l t r) = foldMap f l `mappend` foldMap (foldMap f) t `mappend` foldMap f r
+  foldMap f (More _ l t r) =
+    foldMap f l `mappend` foldMap (foldMap f) t `mappend` foldMap f r
 
 instance Foldable Tuple where
   foldMap :: Monoid m => (a -> m) -> Tuple a -> m
@@ -317,40 +384,9 @@ instance Foldable Some where
 --   traverse f t = undefined -- TODO
 
 ------ Functions ------
-pair :: Measured a => a -> a -> Tuple a
-pair a b = Pair (measure a + measure b) a b
-
-triple :: Measured a => a -> a -> a -> Tuple a
-triple a b c = Triple (measure a + measure b + measure c) a b c
-
--- TODO check i is updated correctly
-insertHead :: Measured a => a -> FingerTree a -> FingerTree a
-insertHead a Nil = Unit a
-insertHead a (Unit b) = more (One a) Nil (One b)
-insertHead a (More _ (One b) ft r) = more (Two a b) ft r
-insertHead a (More _ (Two b c) ft r) = more (Three a b c) ft r
-insertHead a (More _ (Three b c d) ft r) =
-  more (Two a b) (insertHead (pair c d) ft) r
-
--- TODO check i is updated correctly
-insertTail :: Measured a => a -> FingerTree a -> FingerTree a
-insertTail z Nil = Unit z
-insertTail z (Unit a) = more (One a) Nil (One z)
-insertTail z (More _ l ft (One a)) = more l ft (Two a z)
-insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
-insertTail z (More _ l ft (Three a b c)) =
-  more l (insertTail (pair a b) ft) (Two c z)
-
-head :: FingerTree a -> Maybe a
-head Nil = Nothing
-head (Unit x) = Just x
-head (More _ (One x) _ _) = Just x
-head (More _ (Two x _) _ _) = Just x
-head (More _ (Three x _ _) _ _) = Just x
 
 -- TODO check i
 tail :: Measured a => FingerTree a -> FingerTree a
-tail (Unit _) = Nil
 tail (More _ (Three _ x y) ft r) = more (Two x y) ft r
 tail (More _ (Two _ x) ft r) = more (One x) ft r
 tail (More _ (One _) ft r) = case FingerTree.head ft of
@@ -359,7 +395,9 @@ tail (More _ (One _) ft r) = case FingerTree.head ft of
   -- ft is not Nil
   Just (Pair _ x y) -> more (Two x y) (FingerTree.tail ft) r
   Just (Triple _ x _ _) -> more (One x) (map1 chop ft) r
-    where chop (Triple _ _ y z) = pair y z
+    where
+      chop (Triple _ _ y z) = pair y z
+tail _ = Nil
 
 map1 :: Measured a => (a -> a) -> FingerTree a -> FingerTree a
 map1 _ Nil = Nil
@@ -368,23 +406,15 @@ map1 f (More _ (One x) ft r) = more (One (f x)) ft r
 map1 f (More _ (Two x y) ft r) = more (Two (f x) y) ft r
 map1 f (More _ (Three x y z) ft r) = more (Three (f x) y z) ft r
 
-  -- (Nil, One x) -> Just $ Unit x
-  -- (Nil, Two x y) -> Just $ more (One x) Nil (One y)
-  -- (Nil, Three x y z) -> Just $ more (One x) Nil (Two y z)
-  -- _ -> undefined
+-- (Nil, One x) -> Just $ Unit x
+-- (Nil, Two x y) -> Just $ more (One x) Nil (One y)
+-- (Nil, Three x y z) -> Just $ more (One x) Nil (Two y z)
+-- _ -> undefined
 
 -- case FingerTree.head ft of
 --   Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
 
-last :: FingerTree a -> Maybe a
-last Nil = Nothing
-last (Unit x) = Just x
-last (More _ _ _ (One x)) = Just x
-last (More _ _ _ (Two _ x)) = Just x
-last (More _ _ _ (Three _ _ x)) = Just x
-
 removeLast :: Measured a => FingerTree a -> FingerTree a
-removeLast (Unit _) = Nil
 removeLast (More _ l ft (Three x y _)) = more l ft (Two x y)
 removeLast (More _ l ft (Two x _)) = more l ft (One x)
 removeLast (More _ l ft (One _)) = case FingerTree.last ft of
@@ -393,12 +423,11 @@ removeLast (More _ l ft (One _)) = case FingerTree.last ft of
   -- ft is not Nil
   Just (Pair _ x y) -> more l (removeLast ft) (Two x y)
   Just (Triple _ x y z) -> more l (removeLast ft) (Three x y z)
-  
+removeLast _ = Nil
 
 isEmpty :: FingerTree a -> Bool
-isEmpty t = case t of
-  Nil -> True
-  _ -> False
+isEmpty Nil = True
+isEmpty _ = False
 
 append :: Measured a => FingerTree a -> FingerTree a -> FingerTree a
 append t1 = glue t1 []
@@ -408,8 +437,12 @@ glue Nil l t2 = foldr insertHead t2 l
 glue t1 l Nil = foldl (flip insertTail) t1 l
 glue (Unit x) l t2 = foldr insertHead t2 (x : l)
 glue t1 l (Unit y) = foldl (flip insertTail) t1 (l ++ [y])
-glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) =
-  More i1 x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
+glue (More i1 x1 t1 y1) l (More i2 x2 t2 y2) =
+  More
+    (i1 + i2)
+    x1
+    (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2)
+    y2
 
 someToList :: Some a -> [a]
 someToList (One x) = [x]
@@ -422,14 +455,14 @@ listToTuples [x, y] = [pair x y]
 listToTuples [x, y, z, w] = [pair x y, pair z w]
 listToTuples (x : y : z : xs) = triple x y z : listToTuples xs
 
-concat :: [FingerTree a] -> FingerTree a
-concat l = undefined
-
 -- TODO: Figure out what to do if this contains tuples
 toList :: FingerTree a -> [a]
 toList Nil = []
 toList (Unit x) = [x]
-toList (More _ l ft r) = someToList l ++ foldr (\x acc -> tupleToList x ++ acc) [] (toList ft) ++ someToList r
+toList (More _ l ft r) =
+  someToList l
+    ++ foldr (\x acc -> tupleToList x ++ acc) [] (toList ft)
+    ++ someToList r
 
 fromList :: Measured a => [a] -> FingerTree a
 fromList = foldr insertHead Nil
@@ -439,7 +472,6 @@ arbitrarySizedTree m
   | m == 0 = return Nil
   | m > 100 = arbitrarySizedTree 100
   | otherwise = liftM2 insertHead arbitrary (arbitrarySizedTree (m - 1))
-    -- liftM2 (<>) (arbitrarySizedTree (m - 1)) (Unit <$> arbitrary)
 
 instance (Show a, Arbitrary a, Measured a) => Arbitrary (FingerTree a) where
   arbitrary = sized arbitrarySizedTree
@@ -455,22 +487,69 @@ tupleTreeToTree :: Measured a => FingerTree (Tuple a) -> FingerTree a
 tupleTreeToTree Nil = Nil
 tupleTreeToTree (Unit (Pair _ x y)) = More 2 (One x) Nil (One y)
 tupleTreeToTree (Unit (Triple _ x y z)) = More 2 (Two x y) Nil (One z)
-tupleTreeToTree (More _ l Nil r) = fromList (someTupleToList l ++ someTupleToList r)
+tupleTreeToTree (More _ l Nil r) =
+  fromList (someTupleToList l ++ someTupleToList r)
 tupleTreeToTree (More n left ft right) = case (left, right) of
   (One l, One r) -> More n (tupleToSome l) (tupleTreeToTree ft) (tupleToSome r)
-  (One l, Two r1 r2) -> More n (tupleToSome l) (insertTail r1 (tupleTreeToTree ft)) (tupleToSome r2)
-  (One l, Three r1 r2 r3) -> More n (tupleToSome l) (insertTail r2 (insertTail r1 (tupleTreeToTree ft))) (tupleToSome r3)
-  (Two l1 l2, One r) -> More n (tupleToSome l1) (insertHead l2 (tupleTreeToTree ft)) (tupleToSome r)
-  (Two l1 l2, Two r1 r2) -> More n (tupleToSome l1) (insertTail r1 (insertHead l2 (tupleTreeToTree ft))) (tupleToSome r2)
-  (Two l1 l2, Three r1 r2 r3) -> More n (tupleToSome l1) (insertTail r1 (insertTail r2 (insertHead l2 (tupleTreeToTree ft)))) (tupleToSome r3)
-  (Three l1 l2 l3, One r) -> More n (tupleToSome l1) (insertHead l2 (insertHead l3 (tupleTreeToTree ft))) (tupleToSome r)
-  (Three l1 l2 l3, Two r1 r2) -> More n (tupleToSome l1) (insertTail r1 (insertHead l2 (insertHead l3 (tupleTreeToTree ft)))) (tupleToSome r2)
-  (Three l1 l2 l3, Three r1 r2 r3) -> More n (tupleToSome l1) (insertTail r1 (insertTail r2 (insertHead l2 (insertHead l3 (tupleTreeToTree ft))))) (tupleToSome r3)
+  (One l, Two r1 r2) ->
+    More n (tupleToSome l) (insertTail r1 (tupleTreeToTree ft)) (tupleToSome r2)
+  (One l, Three r1 r2 r3) ->
+    More
+      n
+      (tupleToSome l)
+      (insertTail r2 (insertTail r1 (tupleTreeToTree ft)))
+      (tupleToSome r3)
+  (Two l1 l2, One r) ->
+    More
+      n
+      (tupleToSome l1)
+      (insertHead l2 (tupleTreeToTree ft))
+      (tupleToSome r)
+  (Two l1 l2, Two r1 r2) ->
+    More
+      n
+      (tupleToSome l1)
+      (insertTail r1 (insertHead l2 (tupleTreeToTree ft)))
+      (tupleToSome r2)
+  (Two l1 l2, Three r1 r2 r3) ->
+    More
+      n
+      (tupleToSome l1)
+      (insertTail r1 (insertTail r2 (insertHead l2 (tupleTreeToTree ft))))
+      (tupleToSome r3)
+  (Three l1 l2 l3, One r) ->
+    More
+      n
+      (tupleToSome l1)
+      (insertHead l2 (insertHead l3 (tupleTreeToTree ft)))
+      (tupleToSome r)
+  (Three l1 l2 l3, Two r1 r2) ->
+    More
+      n
+      (tupleToSome l1)
+      (insertTail r1 (insertHead l2 (insertHead l3 (tupleTreeToTree ft))))
+      (tupleToSome r2)
+  (Three l1 l2 l3, Three r1 r2 r3) ->
+    More
+      n
+      (tupleToSome l1)
+      ( insertTail
+          r1
+          ( insertTail
+              r2
+              ( insertHead
+                  l2
+                  (insertHead l3 (tupleTreeToTree ft))
+              )
+          )
+      )
+      (tupleToSome r3)
 
 someTupleToList :: Some (Tuple a) -> [a]
 someTupleToList (One t) = tupleToList t
 someTupleToList (Two t1 t2) = tupleToList t1 ++ tupleToList t2
-someTupleToList (Three t1 t2 t3) = tupleToList t1 ++ tupleToList t2 ++ tupleToList t3
+someTupleToList (Three t1 t2 t3) =
+  tupleToList t1 ++ tupleToList t2 ++ tupleToList t3
 
 tupleToList :: Tuple a -> [a]
 tupleToList (Pair _ x y) = [x, y]
@@ -479,6 +558,16 @@ tupleToList (Triple _ x y z) = [x, y, z]
 someToTreeList :: Some a -> [FingerTree a]
 someToTreeList (One x) = [Unit x]
 someToTreeList (Two x y) = [Unit x, Unit y, More 2 (One x) Nil (One y)]
+someToTreeList (Three x y z) =
+  someToTreeList (Two x y)
+    ++ someToTreeList (Two y z)
+    ++ someToTreeList (Two x z)
+    ++ [More 3 (Two x y) Nil (One z)]
+    ++ [More 3 (Two x z) Nil (One y)]
+    ++ [More 3 (Two y z) Nil (One x)]
+    ++ [More 3 (Two y x) Nil (One z)]
+    ++ [More 3 (Two z x) Nil (One y)]
+    ++ [More 3 (Two z y) Nil (One x)]
 
 -- ft1 :: FingerTree Int
 -- ft1 = Unit 1
