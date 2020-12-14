@@ -6,7 +6,32 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module FingerTree2 where
+module FingerTree2
+  ( FingerTree (..),
+    Some (..),
+    Tuple (..),
+    Split (..),
+    split,
+    splitTree,
+    splitSome,
+    splitTuple,
+    (!!),
+    more,
+    pair,
+    triple,
+    Measured,
+    measure,
+    insertHead,
+    insertTail,
+    FingerTree2.head,
+    FingerTree2.tail,
+    isEmpty,
+    append,
+    toList,
+    fromList,
+    removeLast,
+    FingerTree2.last,
+    fmap') where
 
 import Control.Applicative ()
 import Control.Monad ()
@@ -308,8 +333,8 @@ glue Nil l t2 = foldr insertHead t2 l
 glue t1 l Nil = foldl (flip insertTail) t1 l
 glue (Unit x) l t2 = foldr insertHead t2 (x : l)
 glue t1 l (Unit y) = foldl (flip insertTail) t1 (l ++ [y])
-glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) =
-  More i1 x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
+glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) = More i1
+  x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
 
 someToList :: Some a -> [a]
 someToList (One x) = [x]
@@ -378,10 +403,20 @@ removeLast (More _ l ft (One _)) = case last ft of
 -- Random other methods --
 --------------------------
 
-fromList :: Measured c a => [a] -> FingerTree c a
-fromList = foldr insertHead Nil
+fromList :: Measured Int a => [a] -> FingerTree Int a
+fromList = foldr insertHead (Nil :: FingerTree Int a)
 
 -- this was only used for testing
 isEmpty :: FingerTree c a -> Bool
 isEmpty Nil = True
 isEmpty _ = False
+
+toList :: FingerTree c a -> [a]
+toList Nil = []
+toList (Unit x) = [x]
+toList (More _ l ft r) = someToList l ++
+  foldr (\x acc -> tupleToList x ++ acc) [] (toList ft) ++ someToList r
+
+tupleToList :: Tuple c a -> [a]
+tupleToList (Pair _ x y) = [x, y]
+tupleToList (Triple _ x y z) = [x, y, z]

@@ -1,26 +1,21 @@
 # FingerTree.hs
 - Clear out TODOs and comments
-- Rename to OldFingerTree.hs, make sure nothing breaks
 - Reorganize methods to follow same order as FingerTree2
 - Add comments/headers matching FingerTree2
 
 # FingerTree2.hs
 - Add following methods from FingerTree:
-    - `toList` and `fromList`
     - `arbitrarySizedTree` and `arbitrary`
     - `shrink` and shrink helpers
-- Rename to FingerTree.hs, make sure nothing breaks
-- Add derivations to allow benchmarking
 
 # PriorityQueue.hs
-- Implement all stubs
+- Check that all required functions are implemented and exported
 
 # Sequence.hs
-- Implement all stubs
+- Check that all required functions are implemented and exported
 
 # Benchmark.hs
-- Benchmark FingerTree operations compared to List, Seq, (maybe other stuff too?)
-- Benchmark new FingerTree?
+- Done?
 
 # Tests.hs
 - Fill in unit tests
@@ -28,5 +23,4 @@
     - Possibly make these test props of PQ and Sequence in addition to FingerTree
 
 # Application (Main.hs?)
-- Come up with heavily random-access use case that would benefit from FingerTrees
-- Implement said use case
+- Done?
