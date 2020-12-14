@@ -1,6 +1,8 @@
 {-# LANGUAGE ExtendedDefaultRules #-}
 
 import Data.FingerTree as FT
+import Sequence
+import PriorityQueue
 import Data.Maybe as Maybe
 import FingerTree
 -- ( FingerTree.FingerTree (..),
@@ -37,39 +39,30 @@ allHUnit = do
     runTestTT
       ( TestList
           [ tToList,
-            -- tConstruct,
             tInsertHead,
             tInsertTail,
+            tLastTest,
+            tRemoveTail,
             tHead,
             tTail,
             tIsEmpty,
-            tConcat,
+            tFromList,
+            tLength,
             tSplitSome,
             tSplitTree,
             tSplit
-            -- tMap
           ]
       )
   putStrLn ""
 
 allQuickCheck :: IO ()
-allQuickCheck = qcFingerTree
+allQuickCheck = qcPostConditions >> qcMetamorphic >> qcModel
 
 quickCheckN :: Test.QuickCheck.Testable prop => Int -> prop -> IO ()
 quickCheckN n = quickCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
 
 verboseCheckN :: Test.QuickCheck.Testable prop => Int -> prop -> IO ()
 verboseCheckN n = verboseCheckWith $ stdArgs {maxSuccess = n, maxSize = 100}
-
--- TODO:
--- (1) fill in unit tests
--- (2) add quickcheck properties for all the functions
--- (3) add quickcheck properties for remaining type-classes that FingerTree.FingerTrees implements
--- (3) create a quickcheck property that checks if its a valid Finger Tree
---     (not sure how exactly this will be defined)
---     and use that to replace AVL_prop preoprty
--- (4) add unit tests and quickcheck properties for priority queues
---     and sequences
 
 ftEmpty :: FingerTree.FingerTree Int
 ftEmpty = Nil
@@ -136,11 +129,18 @@ tInsertHead =
 
 tTail :: Test
 tTail =
-  TestList []
-
-tConcat :: Test
-tConcat =
-  TestList []
+  TestList [
+    "Tail 0 -> 0" ~: FingerTree.tail Nil ~?= Nil,
+    "Tail 1 -> 0" ~: FingerTree.tail ft1 ~?= Nil,
+    "Tail 2 -> 1" ~: toList (FingerTree.tail ft2) ~?= [2],
+    "Tail 3 -> 2" ~: toList (FingerTree.tail ft3) ~?= [2,3],
+    "Tail 4 -> 3" ~: toList (FingerTree.tail ft4) ~?= [2,3,4],
+    "Tail 5 -> 4" ~: toList (FingerTree.tail ft5) ~?= [2,3,4,5],
+    "Tail 6 -> 5" ~: toList (FingerTree.tail ft6) ~?= [2,3,4,5,6],
+    "Tail 7 -> 6" ~: toList (FingerTree.tail ft7) ~?= [2,3,4,5,6,7],
+    "Tail 8 -> 7" ~: toList (FingerTree.tail ft8) ~?= [2,3,4,5,6,7,8],
+    "Tail 9 -> 8" ~: toList (FingerTree.tail ft9) ~?= [2,3,4,5,6,7,8,9]
+  ]
 
 tInsertTail :: Test
 tInsertTail =
@@ -204,19 +204,6 @@ tIsEmpty =
         ~: all isEmpty [ft1, ft2, ft3, ft4, ft5, ft6, ft7, ft8, ft9]
         ~?= False
     ]
-
--- tConcat :: Test
--- tConcat =
---   TestList
---     []
-
--- "Concat two empty" ~: undefined,
--- "Concat first empty" ~: undefined,
--- "Concat second empty" ~: undefined,
--- "Concat both simple" ~: undefined,
--- "Concat both complex" ~: undefined
-
--- TODO split tuple
 
 tSplitSome :: Test
 tSplitSome =
@@ -300,10 +287,6 @@ tSplit =
      "split len 9, split at 10" ~: tupleMap (FingerTree.split 10 ft9) FingerTree.toList ~?= ([1,2,3,4,5,6,7,8,9],[])
     ]
 
--- "Split all left" ~: undefined,
--- "Split all right" ~: undefined,
--- "Split middle" ~: undefined
-
 tToList :: Test
 tToList =
   TestList
@@ -349,23 +332,9 @@ tLength =
       "Length 9" ~: FingerTree.measure ft9 ~?= 9
     ]
 
--- tContains :: Test
--- tContains =
---   TestList
---     [ "Contains empty false" ~: contains ftEmpty 0 ~?= False,
---       "Contains 1 element true" ~: contains ft1 1 ~?= True,
---       "Contains 1 element false" ~: contains ft1 2 ~?= False,
---       "Contains many elements (head case)" ~: contains ft9 1 ~?= True,
---       "Contains many elements (tail case)" ~: contains ft9 9 ~?= True,
---       "Contains many elements (middle case 1)" ~: contains ft9 4 ~?= True,
---       "Contains many elements (middle case 1)" ~: contains ft9 5 ~?= True,
---       "Contains many elements FALSE" ~: contains ft9 5 ~?= False
---     ]
 --------------- QuickCheck Properties ---------------
 
--- Invariant/Validity Properties? (we don't think there are any as opposed to avl)
-
--- (1) PostCondition Properties
+-- (1) PostCondition (Invariants) Properties
 
 qcPostConditions :: IO ()
 qcPostConditions = qc1 >> qc2 >> qc3 >> qc4 >> qc5 >> qc6 >> qc7
@@ -396,12 +365,6 @@ prop_insertTailLast t x =
   let newTree = insertTail x t
    in Prelude.last (toList newTree) == x
 
--- c. head
--- no postconditions
-
--- d. tail
--- no postconditions
-
 -- e. removeLast
 prop_removeTailChanged :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Bool
 prop_removeTailChanged t =
@@ -409,9 +372,6 @@ prop_removeTailChanged t =
    in case t of
         Nil -> newTree == t
         _ -> newTree /= t
-
--- f. isEmpty
--- no postconditions
 
 -- g. append
 prop_append :: Eq a => FingerTree.Measured a => FingerTree.FingerTree a -> FingerTree.FingerTree a -> Bool
@@ -427,23 +387,6 @@ prop_split x t =
   let (t1, t2) = FingerTree.split x t
    in FingerTree.head t == FingerTree.head t1
         && FingerTree.last t1 == FingerTree.last t2
-
--- i. concat
--- prop_concat :: Eq a => [FingerTree.FingerTree a] -> Bool
--- prop_concat [] = True
--- prop_concat l =
---   let t = FingerTree.concat l
---    in FingerTree.head (Prelude.head l) == FingerTree.head t
---         && FingerTree.last (Prelude.last t) == FingerTree.last t
-
--- j. toList
--- no post-conditional properties
-
--- k. fromList
--- no post-conditions
-
--- m. length
--- no post-conditions
 
 qc1 :: IO ()
 qc1 = quickCheck (prop_insertHeadHead :: FingerTree.FingerTree Int -> Int -> Bool)
@@ -467,6 +410,9 @@ qc7 :: IO ()
 qc7  = quickCheck (prop_split :: Int -> FingerTree.FingerTree Int -> Bool)
 
 -- (2) Metamorphic Properties (Bulk of the testing):
+
+qcMetamorphic :: IO ()
+qcMetamorphic = qc8 >> qc9 >> qc10 >> qc11 >> qc12 >> qc13
 
 -- a.  insert at tail and then remove tail, should be previous tail
 prop_insertRemoveTail :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> a -> Bool
@@ -500,17 +446,34 @@ prop_insertAppend t1 t2 x1 x2 =
                 && FingerTree.last t' == FingerTree.last t2'
                 && toList t' == toList t1' ++ toList t2'
 
--- Added this:
+-- f. append after splitting
 prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
 prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
   t == append t1 t2
 
--- TODO: Add a metamorphic test (at leat one) for split:
--- f. append then split (and vice-versa) -- should end up with what you started
--- g. insert and remove before splitting
--- h. insert and remove after splitting (and then append?) (like adding element in particular spot)
+qc8 :: IO ()
+qc8 = quickCheck (prop_insertRemoveTail :: FingerTree.FingerTree Int -> Int -> Bool)
+
+qc9 :: IO ()
+qc9  = quickCheck (prop_insertTwice :: FingerTree.FingerTree Int -> Int -> Int -> Bool)
+
+qc10 :: IO ()
+qc10  = quickCheck (prop_insertRemoveTwice :: FingerTree.FingerTree Int -> Int -> Int -> Bool)
+
+qc11 :: IO ()
+qc11  = quickCheck (prop_isEmptyInsert :: FingerTree.FingerTree Int -> Int -> Bool)
+
+qc12 :: IO ()
+qc12  = quickCheck (prop_insertAppend :: FingerTree.FingerTree Int -> FingerTree.FingerTree Int -> Int -> Int -> Bool)
+
+qc13 :: IO ()
+qc13  = quickCheck (prop_SplitAppend :: FingerTree.FingerTree Int -> Int -> Bool)
 
 -- (3) Model-Based Poperties (could just use lists for now?)
+
+qcModel :: IO ()
+qcModel = qc14 >> qc15 >> qc16 >> qc17 >> qc18 >> qc19 >> qc20 >> qc21
+
 prop_modelInsertHead :: FingerTree.Measured a => Eq a => [a] -> Bool
 prop_modelInsertHead l =
   let myTree = foldr insertHead Nil l
@@ -556,140 +519,139 @@ prop_modelFromListEveryElementAppend l1 l2 =
    in let modelTree = l1 ++ l2
        in toList myTree == modelTree
 
--- ADDED THIS STUFF:
 prop_modelSplit :: FingerTree.Measured a => Eq a => Int -> [a] -> Bool
 prop_modelSplit x l = 
   let t = FingerTree.fromList l in
     let (t1, t2) = FingerTree.split x t  in
       toList t1 == take x l && toList t2 == drop x l
 
--- TODO: want a model based quick check property for split
+prop_modelAppend :: FingerTree.FingerTree Int -> FingerTree.FingerTree Int -> Bool
+prop_modelAppend t1 t2 = toList (t1 <> t2) == toList t1 ++ toList t2
 
--- TODO: add all the unit tests and quickCheck properties for the type class instances of fingerTree.FingerTree
+qc14 :: IO ()
+qc14 = quickCheck (prop_modelInsertHead :: [Int] -> Bool)
 
--- prop_length :: FingerTree.FingerTree Int -> Bool
--- prop_length ft = Maybe.isJust (count ft)
---   where
---     count Nil = Just 0
---     count (Unit _) = Just 1
---     count (More _ l ft r) = undefined -- count each and add
+qc15 :: IO ()
+qc15  = quickCheck (prop_modelInsertTail ::[Int] -> Bool)
 
-prop_append2 :: FingerTree.FingerTree Int -> FingerTree.FingerTree Int -> Bool
-prop_append2 t1 t2 = toList (t1 <> t2) == toList t1 ++ toList t2
+qc16 :: IO ()
+qc16  = quickCheck (prop_modelFromListHead :: [Int] -> Bool)
 
--- prop_fMapId :: (Eq (f a), Functor f) => f a -> Bool
--- prop_fMapId t = fmap' id t == id t
+qc17 :: IO ()
+qc17  = quickCheck (prop_modelFromListTail :: [Int] -> Bool)
 
--- prop_FMapComp :: (Eq (f c), Functor f) => Fun b c -> Fun a b -> f a -> Bool
--- prop_FMapComp (Fun _ f) (Fun _ g) x =
---   fmap (f . g) x == (fmap f . fmap g) x
+qc18 :: IO ()
+qc18  = quickCheck (prop_modelFromListEveryElement :: [Int] -> Bool)
 
--- prop_LeftUnit :: (Eq (m b), Monad m) => a -> Fun a (m b) -> Bool
--- prop_LeftUnit x (Fun _ f) =
---   (return x >>= f) == f x
+qc19 :: IO ()
+qc19  = quickCheck (prop_modelFromListEveryElementAppend :: [Int] -> [Int] -> Bool)
 
--- prop_RightUnit :: (Eq (m b), Monad m) => m b -> Bool
--- prop_RightUnit m =
---   (m >>= return) == m
+qc20 :: IO ()
+qc20  = quickCheck (prop_modelSplit :: Int -> [Int] -> Bool)
 
--- prop_Assoc ::
---   (Eq (m c), Monad m) =>
---   m a ->
---   Fun a (m b) ->
---   Fun b (m c) ->
---   Bool
--- prop_Assoc m (Fun _ f) (Fun _ g) =
---   ((m >>= f) >>= g) == (m >>= f x >=> g)
-
--- prop_FunctorMonad :: (Eq (m b), Monad m) => m a -> Fun a b -> Bool
--- prop_FunctorMonad x (Fun _ f) = fmap f x == (f <$> x)
-
--- qc1 :: IO ()
--- qc1 = quickCheck (prop_fMapId :: FingerTree.FingerTree Int -> Bool)
-
--- qc2 :: IO ()
--- qc2 =
---   quickCheck
---     (prop_FMapComp :: Fun Int Int -> Fun Int Int -> FingerTree.FingerTree Int -> Bool)
-
--- qc3 :: IO ()
--- qc3 = quickCheck (prop_LeftUnit :: Int -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- qc4 :: IO ()
--- qc4 = quickCheck (prop_RightUnit :: FingerTree.FingerTree Int -> Bool)
-
--- warning, this one is slower than the rest.
--- It takes 10-15 seconds on my machine.
--- qc5 :: IO ()
--- qc5 =
---   quickCheck
---     (prop_Assoc :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- qc6 :: IO ()
--- qc6 = quickCheck (prop_FunctorMonad :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- qc7 :: IO ()
--- qc7 = quickCheck (prop_qc7 :: FingerTree.FingerTree Int -> Fun Int Int -> Bool)
-
--- prop_qc7 :: (Eq b) => FingerTree.FingerTree a -> Fun a b -> Bool
--- prop_qc7 s (Fun _ f) = toList (fmap f s) == fmap f (toList s)
-
--- qc8 :: IO ()
--- qc8 = quickCheck (prop_qc8 :: Int -> Bool)
-
--- prop_qc8 :: (Eq a) => a -> Bool
--- prop_qc8 (x :: a) = toList (return x :: FingerTree.FingerTree a) == return x
-
--- qc9 :: IO ()
--- qc9 = quickCheck (prop_qc9 :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Bool)
-
--- prop_qc9 :: (Eq b) => FingerTree.FingerTree a -> Fun a (FingerTree.FingerTree b) -> Bool
--- prop_qc9 m (Fun _ k) = toList (m >>= k) == (toList m >>= (toList . k))
-
--- qc10 :: IO ()
--- qc10 = quickCheck prop_FingerTree.FingerTree_functor
---   where
---     prop_FingerTree.FingerTree_functor :: Fun Int Int -> FingerTree.FingerTree Int -> Property
---     prop_FingerTree.FingerTree_functor (Fun _ f) x = prop_AVL (fmap f x)
-
--- qc11 :: IO ()
--- qc11 = quickCheck prop_FingerTree.FingerTree_return
---   where
---     prop_FingerTree.FingerTree_return :: Int -> Property
---     prop_FingerTree.FingerTree_return x = prop_AVL (return x)
-
--- qc12 :: IO ()
--- qc12 = quickCheck prop_FingerTree.FingerTree_bind
---   where
---     prop_FingerTree.FingerTree_bind :: FingerTree.FingerTree Int -> Fun Int (FingerTree.FingerTree Int) -> Property
---     prop_FingerTree.FingerTree_bind x (Fun _ k) = prop_AVL (x >>= k)
+qc21 :: IO ()
+qc21  = quickCheck (prop_modelAppend :: FingerTree.FingerTree Int -> FingerTree.FingerTree Int -> Bool)
 
 qcFingerTree :: IO ()
 qcFingerTree = putStrLn "I am in Missouri"
 
--- qc1 >> qc2 >>
--- qc3 >> qc4
--- >> qc5
--- >> qc6
--- >> qc7
 
--- >> qc8
--- >> qc9
+--------------- Sequence Tsts --------- ------
 
--- >> qc10
--- >> qc11
--- >> qc12
+seqEmpty :: Sequence a
+SeqEmpty = Sequence.empty
+
+seq1 :: Sequence a
+seq1 = Sequence.singleton 1 
+
+seq2 :: Sequence a
+seq2 = seq1 |> 2
+
+seq3 :: Sequence a
+seq3 = seq2 |> 3
+
+seq4 :: Sequence a
+seq4 = seq3 |> 4
+
+seq5 :: Sequence a
+seq5 = seq4 |> 5
+
+tSeqUnit :: Test
+tSeqUnit =
+  TestList
+    [ "Seq empty" ~: Sequence.toList seqEmpty ~?= [],
+      "Seq 1" ~: Sequence.toList seq1 ~?= [1],
+      "Seq 2" ~: Sequence.toList seq2 ~?= [1,2],
+      "Seq 3" ~: Sequence.toList seq3 ~?= [1,2,3],
+      "Seq 4" ~: Sequence.toList seq4 ~?= [1,2,3,4],
+      "Seq 4" ~: Sequence.toList seq5 ~?= [1,2,3,4,5]
+    ]
+
+-- QuickCheck PostCondition Properties:
+prop_postCondtionDeleteAt :: Sequence Int -> Int -> Bool
+prop_postCondtionDeleteAt s i = let oldSize = size s in
+  (oldSize - 1) == size (Sequence.deleteAt i s)
+
+prop_postConditionInsertHead :: Sequence Int -> Int -> Bool
+prop_postConditionInsertHead s x = let s1 = x Sequence.<| s in
+  first s1 == Just x
+
+prop_postConditionInsertTail :: Sequence Int -> Int -> Bool
+prop_postConditionInsertTail s x = let s2 = s Sequence.|> x in
+  first s1 == Just x
+
+-- QuickCheck Metamorphic Properties:
+
+deleteAt :: Int -> [a] -> [a]
+deleteAt idx xs = lft ++ rgt
+  where (lft, (_ : rgt)) = splitAt idx xs
+
+insertAt :: Int -> a -> [a] -> [a]
+insertAt idx elt xs = lft ++ (elt : rgt)
+  where (lft, rgt) = splitAt idx xs
+
+prop_InsertAtLookUp :: Sequence Int -> Int -> Int -> Bool
+prop_InsertAtLookUp s i x = let s1 = Sequence.insertAt i x s in
+  if i < Sequence.length s then Sequence.lookup i s1 == Just x else Sequence.lookup i s1 == Nothing
+
+prop_deleteAtLookUp :: [Int] -> Int -> Bool
+prop_deleteAtLookUp l i x = 
+  let s = Sequence.fromList l in
+    let s1 = Sequence.deleteAt i l in
+      Sequence.toList s1 == Main.deleteAt i l
+
+prop_seqAppend :: Sequence Int -> Sequence Int -> Bool
+prop_seqAppend s1 s2 = let s2 = s Sequence.|> x in
+  first s1 == Just xM
 
 
+----------- Priority Queue Tests -----------
 
--- Added this:
--- prop_SplitAppend :: FingerTree.Measured a => Eq a => FingerTree.FingerTree a -> Int -> Bool
--- prop_SplitAppend t x = let (t1, t2) = FingerTree.split x t in
---   t == append t1 t2
+pqEmpty :: PriorityQueue a
+pqEmpty = PriorityQueue.empty
 
--- -- ADDED THIS STUFF:
--- prop_modelSplit :: FingerTree.Measured a => Eq a => Int -> [a] -> Bool
--- prop_modelSplit x l = 
---   let t = FingerTree.fromList l in
---     let (t1, t2) = FingerTree.split x t  in
---       toList t1 == take x l && toList t2 == drop x l
+pq1 :: PriorityQueue a
+pq1 = PriorityQueue.singleton 1 
+
+pq2 :: PriorityQueue a
+pq2 = enqueue pq1 2
+
+pq3 :: PriorityQueue a
+pq3 = enqueue pq2 3
+
+pq4 :: PriorityQueue a
+pq4 = enqueue pq3 4
+
+pq5 :: PriorityQueue a
+pq5 = enqueue pq4 5
+
+tPQUnit :: Test
+tPQUnit =
+  TestList
+    [ "PQ empty" ~: PriortiyQueue.toList pqEmpty ~?= [],
+      "PQ 1" ~: PriortiyQueue.toList pq1 ~?= [1],
+      "PQ 2" ~: PriortiyQueue.toList pq2 ~?= [1,2],
+      "PQ 3" ~: PriortiyQueue.toList pq3 ~?= [1,2,3],
+      "PQ 4" ~: PriortiyQueue.toList pq4 ~?= [1,2,3,4],
+      "PQ 4" ~: SequePriortiyQueuence.toList pq5 ~?= [1,2,3,4,5]
+    ]
