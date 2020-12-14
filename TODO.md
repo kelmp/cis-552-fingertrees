@@ -10,6 +10,7 @@
     - `arbitrarySizedTree` and `arbitrary`
     - `shrink` and shrink helpers
 - Rename to FingerTree.hs, make sure nothing breaks
+- Add derivations to allow benchmarking
 
 # PriorityQueue.hs
 - Implement all stubs
@@ -18,8 +19,8 @@
 - Implement all stubs
 
 # Benchmark.hs
-- Implement benchmark suite from article in Stephanie's email
 - Benchmark FingerTree operations compared to List, Seq, (maybe other stuff too?)
+- Benchmark new FingerTree?
 
 # Tests.hs
 - Fill in unit tests
