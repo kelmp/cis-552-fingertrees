@@ -1,10 +1,18 @@
 # FingerTree.hs
-- Implement all stubs
-- Add more functionalities from older paper
+- Clear out TODOs and comments
+- Rename to OldFingerTree.hs, make sure nothing breaks
+- Reorganize methods to follow same order as FingerTree2
+- Add comments/headers matching FingerTree2
+
+# FingerTree2.hs
+- Add following methods from FingerTree:
+    - `toList` and `fromList`
+    - `arbitrarySizedTree` and `arbitrary`
+    - `shrink` and shrink helpers
+- Rename to FingerTree.hs, make sure nothing breaks
 
 # PriorityQueue.hs
 - Implement all stubs
-- Refactor to eliminate max/min (single PQ is max and min, just choose which end to remove from)
 
 # Sequence.hs
 - Implement all stubs
