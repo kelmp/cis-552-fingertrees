@@ -169,7 +169,7 @@ queueLoop q =
     case q of
       Nil -> putStrLn "The line is empty, so this demo is over. Thanks!"
       _ -> do
-        toAdd <- randomRIO(0, 10)
+        toAdd <- randomRIO(1, 10)
         -- putStrLn $ "queue pre-add: " ++ show (measure q)
         -- putStrLn $ "toAdd: " ++ show toAdd
         q <- addPeople toAdd q
