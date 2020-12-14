@@ -5,6 +5,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module FingerTree2
   ( FingerTree (..),
@@ -42,6 +44,8 @@ import Data.Semigroup ()
 import Data.Traversable ()
 import Test.QuickCheck ()
 import Prelude hiding (head, tail, last)
+import Control.DeepSeq (NFData)
+import GHC.Generics (Generic)
 
 ----------------
 -- DATA TYPES --
@@ -55,7 +59,7 @@ data FingerTree c a
   = Nil
   | Unit a
   | More c (Some a) (FingerTree c (Tuple c a)) (Some a)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 -- Outside of a FingerTree. No length cached, since they are only contain the
 -- base type in the outer branches of the first layer of the tree
@@ -63,14 +67,14 @@ data Some a
   = One a
   | Two a a
   | Three a a a
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 -- Used in nested FingerTrees. Length is cached since they contain some unknown
 -- number of elements in lower layers
 data Tuple c a
   = Pair c a a
   | Triple c a a a
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 --------------
 -- Measured --
