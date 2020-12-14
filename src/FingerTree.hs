@@ -28,7 +28,8 @@ module FingerTree
     toList,
     fromList,
     removeLast,
-    FingerTree.last) where
+    FingerTree.last,
+    fmap') where
 
 import Control.Applicative ()
 import Control.Monad
@@ -296,7 +297,8 @@ tupleToSome (Triple _ a b c) = Three a b c
 fmap' :: Measured a => Measured b => (a -> b) -> FingerTree a -> FingerTree b
 fmap' _ Nil = Nil
 fmap' f (Unit x) = Unit (f x)
-fmap' f (More _ l t r) = more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
+fmap' f (More _ l t r) =
+  more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
 
 fmapSome :: Measured a => Measured b => (a -> b) -> Some a -> Some b
 fmapSome f (One x) = One (f x)
@@ -344,9 +346,10 @@ instance Measured a => Semigroup (FingerTree a) where
 
 instance Foldable FingerTree where
   foldMap :: Monoid m => (a -> m) -> FingerTree a -> m
-  foldMap f Nil = mempty
+  foldMap _ Nil = mempty
   foldMap f (Unit x) = f x
-  foldMap f (More n l t r) = foldMap f l `mappend` foldMap (foldMap f) t `mappend` foldMap f r
+  foldMap f (More _ l t r) =
+    foldMap f l `mappend` foldMap (foldMap f) t `mappend` foldMap f r
 
 instance Foldable Tuple where
   foldMap :: Monoid m => (a -> m) -> Tuple a -> m
@@ -417,8 +420,8 @@ glue Nil l t2 = foldr insertHead t2 l
 glue t1 l Nil = foldl (flip insertTail) t1 l
 glue (Unit x) l t2 = foldr insertHead t2 (x : l)
 glue t1 l (Unit y) = foldl (flip insertTail) t1 (l ++ [y])
-glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) =
-  More i1 x1 (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
+glue (More i1 x1 t1 y1) l (More _ x2 t2 y2) = More i1 x1
+  (glue t1 (listToTuples (someToList y1 ++ l ++ someToList x2)) t2) y2
 
 someToList :: Some a -> [a]
 someToList (One x) = [x]
@@ -435,7 +438,8 @@ listToTuples (x : y : z : xs) = triple x y z : listToTuples xs
 toList :: FingerTree a -> [a]
 toList Nil = []
 toList (Unit x) = [x]
-toList (More _ l ft r) = someToList l ++ foldr (\x acc -> tupleToList x ++ acc) [] (toList ft) ++ someToList r
+toList (More _ l ft r) = someToList l ++
+  foldr (\x acc -> tupleToList x ++ acc) [] (toList ft) ++ someToList r
 
 fromList :: Measured a => [a] -> FingerTree a
 fromList = foldr insertHead Nil
@@ -460,22 +464,47 @@ tupleTreeToTree :: Measured a => FingerTree (Tuple a) -> FingerTree a
 tupleTreeToTree Nil = Nil
 tupleTreeToTree (Unit (Pair _ x y)) = More 2 (One x) Nil (One y)
 tupleTreeToTree (Unit (Triple _ x y z)) = More 2 (Two x y) Nil (One z)
-tupleTreeToTree (More _ l Nil r) = fromList (someTupleToList l ++ someTupleToList r)
+tupleTreeToTree (More _ l Nil r) =
+  fromList (someTupleToList l ++ someTupleToList r)
 tupleTreeToTree (More n left ft right) = case (left, right) of
   (One l, One r) -> More n (tupleToSome l) (tupleTreeToTree ft) (tupleToSome r)
-  (One l, Two r1 r2) -> More n (tupleToSome l) (insertTail r1 (tupleTreeToTree ft)) (tupleToSome r2)
-  (One l, Three r1 r2 r3) -> More n (tupleToSome l) (insertTail r2 (insertTail r1 (tupleTreeToTree ft))) (tupleToSome r3)
-  (Two l1 l2, One r) -> More n (tupleToSome l1) (insertHead l2 (tupleTreeToTree ft)) (tupleToSome r)
-  (Two l1 l2, Two r1 r2) -> More n (tupleToSome l1) (insertTail r1 (insertHead l2 (tupleTreeToTree ft))) (tupleToSome r2)
-  (Two l1 l2, Three r1 r2 r3) -> More n (tupleToSome l1) (insertTail r1 (insertTail r2 (insertHead l2 (tupleTreeToTree ft)))) (tupleToSome r3)
-  (Three l1 l2 l3, One r) -> More n (tupleToSome l1) (insertHead l2 (insertHead l3 (tupleTreeToTree ft))) (tupleToSome r)
-  (Three l1 l2 l3, Two r1 r2) -> More n (tupleToSome l1) (insertTail r1 (insertHead l2 (insertHead l3 (tupleTreeToTree ft)))) (tupleToSome r2)
-  (Three l1 l2 l3, Three r1 r2 r3) -> More n (tupleToSome l1) (insertTail r1 (insertTail r2 (insertHead l2 (insertHead l3 (tupleTreeToTree ft))))) (tupleToSome r3)
+  (One l, Two r1 r2) ->
+    More n (tupleToSome l) (insertTail r1 (tupleTreeToTree ft)) (tupleToSome r2)
+  (One l, Three r1 r2 r3) -> More n
+    (tupleToSome l)
+    (insertTail r2 (insertTail r1 (tupleTreeToTree ft)))
+    (tupleToSome r3)
+  (Two l1 l2, One r) -> More n
+    (tupleToSome l1)
+    (insertHead l2 (tupleTreeToTree ft))
+    (tupleToSome r)
+  (Two l1 l2, Two r1 r2) -> More n
+    (tupleToSome l1)
+    (insertTail r1 (insertHead l2 (tupleTreeToTree ft)))
+    (tupleToSome r2)
+  (Two l1 l2, Three r1 r2 r3) -> More n
+    (tupleToSome l1)
+    (insertTail r1 (insertTail r2 (insertHead l2 (tupleTreeToTree ft))))
+    (tupleToSome r3)
+  (Three l1 l2 l3, One r) -> More n
+    (tupleToSome l1)
+    (insertHead l2 (insertHead l3 (tupleTreeToTree ft)))
+    (tupleToSome r)
+  (Three l1 l2 l3, Two r1 r2) ->
+    More n (tupleToSome l1)
+    (insertTail r1 (insertHead l2 (insertHead l3 (tupleTreeToTree ft))))
+    (tupleToSome r2)
+  (Three l1 l2 l3, Three r1 r2 r3) ->
+    More n (tupleToSome l1)
+    (insertTail r1 (insertTail r2 (insertHead l2 
+      (insertHead l3 (tupleTreeToTree ft)))))
+    (tupleToSome r3)
 
 someTupleToList :: Some (Tuple a) -> [a]
 someTupleToList (One t) = tupleToList t
 someTupleToList (Two t1 t2) = tupleToList t1 ++ tupleToList t2
-someTupleToList (Three t1 t2 t3) = tupleToList t1 ++ tupleToList t2 ++ tupleToList t3
+someTupleToList (Three t1 t2 t3) =
+  tupleToList t1 ++ tupleToList t2 ++ tupleToList t3
 
 tupleToList :: Tuple a -> [a]
 tupleToList (Pair _ x y) = [x, y]
