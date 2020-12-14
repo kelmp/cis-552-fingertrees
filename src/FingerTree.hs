@@ -1,6 +1,8 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module FingerTree 
   ( FingerTree (..),
@@ -26,7 +28,6 @@ module FingerTree
     toList,
     fromList,
     removeLast,
-    FingerTree.concat,
     FingerTree.last) where
 
 import Control.Applicative ()
@@ -39,6 +40,8 @@ import Data.Traversable ()
 import Test.HUnit ()
 import Test.QuickCheck
 import Prelude hiding ((!!))
+import Control.DeepSeq (NFData)
+import GHC.Generics (Generic)
 
 default (Int)
 
@@ -54,7 +57,7 @@ data FingerTree a
   = Nil
   | Unit a
   | More Int (Some a) (FingerTree (Tuple a)) (Some a)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 -- Outside of a FingerTree. No length cached, since they are only the outermost
 -- type in the first layer of the tree
@@ -62,14 +65,14 @@ data Some a
   = One a
   | Two a a
   | Three a a a
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 -- Used in nested FingerTrees. Length is cached since they contain some unknown
 -- number of elements in lower layers
 data Tuple a
   = Pair Int a a
   | Triple Int a a a
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 --------------
 -- Measured --
@@ -403,9 +406,8 @@ removeLast (More _ l ft (One _)) = case FingerTree.last ft of
   
 
 isEmpty :: FingerTree a -> Bool
-isEmpty t = case t of
-  Nil -> True
-  _ -> False
+isEmpty Nil = True
+isEmpty _ = False
 
 append :: Measured a => FingerTree a -> FingerTree a -> FingerTree a
 append t1 = glue t1 []
@@ -429,9 +431,6 @@ listToTuples [x, y] = [pair x y]
 listToTuples [x, y, z, w] = [pair x y, pair z w]
 listToTuples (x : y : z : xs) = triple x y z : listToTuples xs
 
-concat :: [FingerTree a] -> FingerTree a
-concat l = undefined
-
 -- TODO: Figure out what to do if this contains tuples
 toList :: FingerTree a -> [a]
 toList Nil = []
@@ -446,7 +445,6 @@ arbitrarySizedTree m
   | m == 0 = return Nil
   | m > 100 = arbitrarySizedTree 100
   | otherwise = liftM2 insertHead arbitrary (arbitrarySizedTree (m - 1))
-    -- liftM2 (<>) (arbitrarySizedTree (m - 1)) (Unit <$> arbitrary)
 
 instance (Show a, Arbitrary a, Measured a) => Arbitrary (FingerTree a) where
   arbitrary = sized arbitrarySizedTree
