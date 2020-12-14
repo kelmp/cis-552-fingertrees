@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       FingerTree
+      FingerTree2
       PriorityQueue
       Sequence
   other-modules:
@@ -58,7 +59,7 @@ test-suite proj-test
   main-is: Tests.hs
   other-modules:
       Benchmark
-      Paths_proj
+      Paths_project_cis552
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
