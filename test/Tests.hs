@@ -5,24 +5,18 @@ import Data.Maybe as Maybe
 import FingerTree as FT
 import PriorityQueue as PQ
 import Sequence
--- ( FT.FingerTree (..),
---   append,
---   concat,
---   fromList,
---   head,
---   insertHead,
---   insertTail,
---   isEmpty,
---   last,
---   removeLast,
---   split,
---   tail,
---   toList,
--- )
 import Test.HUnit
 import Test.QuickCheck
 
 default (Int)
+
+---------------------------------------------------------
+-- TESTING DIRECTORY:                                   |
+-- Finger Tree Unit Tests:              Lines 103 - 434 |
+-- Finger Tree QuickCheck Properties:   Lines 436 - 683 |
+-- Sequence Tests:                      Lines 685 - 783 |
+-- Priority Queue Tests:                Lines 785 - 896 |
+---------------------------------------------------------
 
 main :: IO ()
 main = testAll

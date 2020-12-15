@@ -139,7 +139,7 @@ instance (Ord a, Show a, Arbitrary a) => Arbitrary (PriorityQueue a) where
 
 -- instance Applicative PriorityQueue where
 --   pure :: a -> PriorityQueue a
---   pure t = undefined -- TODO
+--   pure t = undefined
 
 --   (<*>) :: PriorityQueue (a -> b) -> PriorityQueue a -> PriorityQueue b
 --   t1 <*> t2 = FingerTree . (<*>)

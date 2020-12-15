@@ -139,7 +139,7 @@ triple :: Measured c a => a -> a -> a -> Tuple c a
 triple x y z = Triple (measure x <> measure y <> measure z) x y z
 
 ------------------
--- Type classes --
+-- Foldable --
 ------------------
 instance Foldable (FingerTree c) where
   foldMap :: Monoid m => (a -> m) -> FingerTree c a -> m
@@ -376,7 +376,9 @@ insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
 insertTail z (More _ l ft (Three a b c)) =
   more l (insertTail (pair a b) ft) (Two c z)
 
--- Combining trees --
+------------
+-- Append --
+------------
 append :: Measured c a => FingerTree c a -> FingerTree c a -> FingerTree c a
 append t1 = glue t1 []
 
@@ -462,9 +464,9 @@ removeLast (More _ l ft (One _)) = case last ft of
   Just (Triple _ x y z) -> more l (removeLast ft) (Three x y z)
 removeLast _ = Nil
 
---------------------------
--- Random other methods --
---------------------------
+---------------------
+-- Other functions --
+---------------------
 
 fromList :: Measured c a => c -> [a] -> FingerTree c a
 fromList mes = foldr insertHead (Nil :: FingerTree mes a)

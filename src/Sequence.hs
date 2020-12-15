@@ -13,6 +13,7 @@ import Data.Traversable
 import FingerTree
 import Test.QuickCheck
 
+-- Sequence type is comparable to Haskell's Data.Sequence
 newtype Sequence a = Seq (FingerTree a)
   deriving (Eq, Show)
 
@@ -29,12 +30,15 @@ empty = Seq Nil
 singleton :: Measured a => a -> Sequence a
 singleton x = Seq $ Unit x
 
+-- Insert new element at beg. of sequence
 (<|) :: Measured a => a -> Sequence a -> Sequence a
 (<|) x (Seq t) = Seq (insertHead x t)
 
+-- Insert new element at end of sequence
 (|>) :: Measured a => Sequence a -> a -> Sequence a
 (|>) (Seq t) x = Seq (insertTail x t)
 
+-- Append two sequences together
 (<>) :: Measured a => Sequence a -> Sequence a -> Sequence a
 (<>) (Seq t1) (Seq t2) = Seq (append t1 t2)
 
@@ -70,11 +74,13 @@ null (Seq t) = t == Nil
 length :: Measured a => Sequence a -> Int
 length (Seq t) = measure t
 
+-- Given an index, split a sequence into a list of two sequenes at index
 seqSplit :: Measured a => Sequence a -> Int -> [Sequence a]
 seqSplit (Seq t) i =
   let (t1, t2) = FingerTree.split i t
    in [Seq t1, Seq t2]
 
+-- Given an index, get elt stored at that index, if there is one
 lookup :: Eq a => Measured a => Int -> Sequence a -> Maybe a
 lookup x (Seq t) =
   let (_, t2) = split x t

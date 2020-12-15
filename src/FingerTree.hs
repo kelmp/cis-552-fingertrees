@@ -88,54 +88,35 @@ class Measured a where
   default measure :: a -> Int
   measure _ = 1
 
+-- Ints were frequently used for testing (cached length and as contained values)
 instance Measured Int
 
+-- extract cached measurement from self, or from a single wrapped element
+-- (either a value or a FingerTree with cached length)
 instance Measured a => Measured (FingerTree a) where
   measure Nil = 0
   measure (Unit x) = measure x
   measure (More l _ _ _) = l
 
+-- get the measurement of a Some. x, y, and z are either elements or something
+-- with cached measurement.
 instance Measured a => Measured (Some a) where
   measure (One x) = measure x
   measure (Two x y) = measure x + measure y
   measure (Three x y z) = measure x + measure y + measure z
 
+-- Tuples have cached measurement
 instance Measured (Tuple a) where
   measure (Pair l _ _) = l
   measure (Triple l _ _ _) = l
 
-----------------------
--- Queue operations --
-----------------------
-insertHead :: Measured a => a -> FingerTree a -> FingerTree a
-insertHead a Nil = Unit a
-insertHead a (Unit b) = more (One a) Nil (One b)
-insertHead a (More _ (One b) ft r) = more (Two a b) ft r
-insertHead a (More _ (Two b c) ft r) = more (Three a b c) ft r
-insertHead a (More _ (Three b c d) ft r) =
-  more (Two a b) (insertHead (pair c d) ft) r
+instance Measured a => Monoid (FingerTree a) where
+  mempty :: FingerTree a
+  mempty = Nil
 
-insertTail :: Measured a => a -> FingerTree a -> FingerTree a
-insertTail z Nil = Unit z
-insertTail z (Unit a) = more (One a) Nil (One z)
-insertTail z (More _ l ft (One a)) = more l ft (Two a z)
-insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
-insertTail z (More _ l ft (Three a b c)) =
-  more l (insertTail (pair a b) ft) (Two c z)
-
-head :: FingerTree a -> Maybe a
-head Nil = Nothing
-head (Unit x) = Just x
-head (More _ (One x) _ _) = Just x
-head (More _ (Two x _) _ _) = Just x
-head (More _ (Three x _ _) _ _) = Just x
-
-last :: FingerTree a -> Maybe a
-last Nil = Nothing
-last (Unit x) = Just x
-last (More _ _ _ (One x)) = Just x
-last (More _ _ _ (Two _ x)) = Just x
-last (More _ _ _ (Three _ _ x)) = Just x
+instance Measured a => Semigroup (FingerTree a) where
+  (<>) :: Measured a => FingerTree a -> FingerTree a -> FingerTree a
+  (<>) = append
 
 ------------------------
 -- Smart constructors --
@@ -148,6 +129,48 @@ pair a b = Pair (measure a + measure b) a b
 
 triple :: Measured a => a -> a -> a -> Tuple a
 triple a b c = Triple (measure a + measure b + measure c) a b c
+
+--------------
+-- Foldable --
+--------------
+instance Foldable FingerTree where
+  foldMap :: Monoid m => (a -> m) -> FingerTree a -> m
+  foldMap _ Nil = mempty
+  foldMap f (Unit x) = f x
+  foldMap f (More _ l t r) =
+    foldMap f l `mappend` foldMap (foldMap f) t `mappend` foldMap f r
+
+instance Foldable Tuple where
+  foldMap :: Monoid m => (a -> m) -> Tuple a -> m
+  foldMap f (Pair _ x y) = f x `mappend` f y
+  foldMap f (Triple _ x y z) = f x `mappend` f y `mappend` f z
+
+instance Foldable Some where
+  foldMap :: Monoid m => (a -> m) -> Some a -> m
+  foldMap f (One x) = f x
+  foldMap f (Two x y) = f x `mappend` f y
+  foldMap f (Three x y z) = f x `mappend` f y `mappend` f z
+
+------------------------
+-- Pseudo-applicative --
+------------------------
+-- Measured constraints on the FingerTree type mean that implementing Functor
+-- would require fmap to have constraints as well. fmap doesn't like constraints
+-- so we had to write our own fmap equivalent.
+fmap' :: Measured a => Measured b => (a -> b) -> FingerTree a -> FingerTree b
+fmap' _ Nil = Nil
+fmap' f (Unit x) = Unit (f x)
+fmap' f (More _ l t r) =
+  more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
+
+fmapSome :: Measured a => Measured b => (a -> b) -> Some a -> Some b
+fmapSome f (One x) = One (f x)
+fmapSome f (Two x y) = Two (f x) (f y)
+fmapSome f (Three x y z) = Three (f x) (f y) (f z)
+
+fmapTuple :: Measured a => Measured b => (a -> b) -> Tuple a -> Tuple b
+fmapTuple f (Pair _ x y) = pair (f x) (f y)
+fmapTuple f (Triple _ x y z) = triple (f x) (f y) (f z)
 
 -----------
 -- Split --
@@ -299,93 +322,43 @@ tupleToSome :: Tuple a -> Some a
 tupleToSome (Pair _ a b) = Two a b
 tupleToSome (Triple _ a b c) = Three a b c
 
--- instance Monad FingerTree where
---   return :: a -> FingerTree a
---   return = Unit
+----------------------
+-- Queue operations --
+----------------------
+-- Insertion to head and tail are both O(1)
+insertHead :: Measured a => a -> FingerTree a -> FingerTree a
+insertHead a Nil = Unit a
+insertHead a (Unit b) = more (One a) Nil (One b)
+insertHead a (More _ (One b) ft r) = more (Two a b) ft r
+insertHead a (More _ (Two b c) ft r) = more (Three a b c) ft r
+insertHead a (More _ (Three b c d) ft r) =
+  more (Two a b) (insertHead (pair c d) ft) r
 
---   (>>=) :: FingerTree a -> (a -> FingerTree b) -> FingerTree b
---   Nil >>= f = Nil
---   (Unit x) >>= f = f x
---   (More n l t r) >>= f = undefined
+insertTail :: Measured a => a -> FingerTree a -> FingerTree a
+insertTail z Nil = Unit z
+insertTail z (Unit a) = more (One a) Nil (One z)
+insertTail z (More _ l ft (One a)) = more l ft (Two a z)
+insertTail z (More _ l ft (Two a b)) = more l ft (Three a b z)
+insertTail z (More _ l ft (Three a b c)) =
+  more l (insertTail (pair a b) ft) (Two c z)
 
--- instead of making it an instance of functor, we just make our own fmap
--- (Or, we could potentially write a function that measures a non-meaured type)
+-- first element
+head :: FingerTree a -> Maybe a
+head Nil = Nothing
+head (Unit x) = Just x
+head (More _ (One x) _ _) = Just x
+head (More _ (Two x _) _ _) = Just x
+head (More _ (Three x _ _) _ _) = Just x
 
-fmap' :: Measured a => Measured b => (a -> b) -> FingerTree a -> FingerTree b
-fmap' _ Nil = Nil
-fmap' f (Unit x) = Unit (f x)
-fmap' f (More _ l t r) =
-  more (fmapSome f l) (fmap' (fmapTuple f) t) (fmapSome f r)
+-- last element
+last :: FingerTree a -> Maybe a
+last Nil = Nothing
+last (Unit x) = Just x
+last (More _ _ _ (One x)) = Just x
+last (More _ _ _ (Two _ x)) = Just x
+last (More _ _ _ (Three _ _ x)) = Just x
 
-fmapSome :: Measured a => Measured b => (a -> b) -> Some a -> Some b
-fmapSome f (One x) = One (f x)
-fmapSome f (Two x y) = Two (f x) (f y)
-fmapSome f (Three x y z) = Three (f x) (f y) (f z)
-
-fmapTuple :: Measured a => Measured b => (a -> b) -> Tuple a -> Tuple b
-fmapTuple f (Pair _ x y) = pair (f x) (f y)
-fmapTuple f (Triple _ x y z) = triple (f x) (f y) (f z)
-
--- fmap is supposed to take in two measured things but, it can't
-
--- toMeasured :: Measured c => b -> c
--- toMeasured x = Measured x
-
-mapSome :: Some a -> (a -> b) -> Some b
-mapSome (One x) f = One (f x)
-mapSome (Two x y) f = Two (f x) (f y)
-mapSome (Three x y z) f = Three (f x) (f y) (f z)
-
--- instance Applicative FingerTree where
---   pure = undefined
---   (<*>) = undefined
-
--- instance Applicative FingerTree where
---   pure :: a -> FingerTree a
---   pure = Unit
-
---   (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
---   Nil <*> _ = Nil
--- 	_ <*> Nil = Nil
--- 	(Unit f) <*> (Unit x) = Unit (f x)
---   (Unit f) <*> (More _ _ x _) = Unit (f x)
--- 	(Node _ f _) <*> (Unit v) = undefined
--- 	(Node l f r) <*> (Node l' v r') =
--- 		Node (l <*> l') (f v) (r <*> r')
-
-instance Measured a => Monoid (FingerTree a) where
-  mempty :: FingerTree a
-  mempty = Nil
-
-instance Measured a => Semigroup (FingerTree a) where
-  (<>) :: Measured a => FingerTree a -> FingerTree a -> FingerTree a
-  (<>) = append
-
-instance Foldable FingerTree where
-  foldMap :: Monoid m => (a -> m) -> FingerTree a -> m
-  foldMap _ Nil = mempty
-  foldMap f (Unit x) = f x
-  foldMap f (More _ l t r) =
-    foldMap f l `mappend` foldMap (foldMap f) t `mappend` foldMap f r
-
-instance Foldable Tuple where
-  foldMap :: Monoid m => (a -> m) -> Tuple a -> m
-  foldMap f (Pair _ x y) = f x `mappend` f y
-  foldMap f (Triple _ x y z) = f x `mappend` f y `mappend` f z
-
-instance Foldable Some where
-  foldMap :: Monoid m => (a -> m) -> Some a -> m
-  foldMap f (One x) = f x
-  foldMap f (Two x y) = f x `mappend` f y
-  foldMap f (Three x y z) = f x `mappend` f y `mappend` f z
-
--- instance Traversable FingerTree where
---   traverse :: Applicative z => (a -> z b) -> FingerTree a -> z (FingerTree b)
---   traverse f t = undefined -- TODO
-
------- Functions ------
-
--- TODO check i
+-- everything but the head
 tail :: Measured a => FingerTree a -> FingerTree a
 tail (More _ (Three _ x y) ft r) = more (Two x y) ft r
 tail (More _ (Two _ x) ft r) = more (One x) ft r
@@ -406,14 +379,7 @@ map1 f (More _ (One x) ft r) = more (One (f x)) ft r
 map1 f (More _ (Two x y) ft r) = more (Two (f x) y) ft r
 map1 f (More _ (Three x y z) ft r) = more (Three (f x) y z) ft r
 
--- (Nil, One x) -> Just $ Unit x
--- (Nil, Two x y) -> Just $ more (One x) Nil (One y)
--- (Nil, Three x y z) -> Just $ more (One x) Nil (Two y z)
--- _ -> undefined
-
--- case FingerTree.head ft of
---   Just (Pair x y) -> Just $ More (Two x y) (FingerTree.tail ft) r
-
+-- everything but the last element
 removeLast :: Measured a => FingerTree a -> FingerTree a
 removeLast (More _ l ft (Three x y _)) = more l ft (Two x y)
 removeLast (More _ l ft (Two x _)) = more l ft (One x)
@@ -425,10 +391,45 @@ removeLast (More _ l ft (One _)) = case FingerTree.last ft of
   Just (Triple _ x y z) -> more l (removeLast ft) (Three x y z)
 removeLast _ = Nil
 
+-- instance Monad FingerTree where
+--   return :: a -> FingerTree a
+--   return = Unit
+
+--   (>>=) :: FingerTree a -> (a -> FingerTree b) -> FingerTree b
+--   Nil >>= f = Nil
+--   (Unit x) >>= f = f x
+--   (More n l t r) >>= f = undefined
+
+-- fmap is supposed to take in two measured things but, it can't
+
+-- toMeasured :: Measured c => b -> c
+-- toMeasured x = Measured x
+
+-- instance Applicative FingerTree where
+--   pure = undefined
+--   (<*>) = undefined
+
+-- instance Applicative FingerTree where
+--   pure :: a -> FingerTree a
+--   pure = Unit
+
+--   (<*>) :: FingerTree (a -> b) -> FingerTree a -> FingerTree b
+--   Nil <*> _ = Nil
+-- 	_ <*> Nil = Nil
+-- 	(Unit f) <*> (Unit x) = Unit (f x)
+--   (Unit f) <*> (More _ _ x _) = Unit (f x)
+-- 	(Node _ f _) <*> (Unit v) = undefined
+-- 	(Node l f r) <*> (Node l' v r') =
+-- 		Node (l <*> l') (f v) (r <*> r')
+
+---------------------
+-- Other functions --
+---------------------
 isEmpty :: FingerTree a -> Bool
 isEmpty Nil = True
 isEmpty _ = False
 
+-- put two FingerTrees together
 append :: Measured a => FingerTree a -> FingerTree a -> FingerTree a
 append t1 = glue t1 []
 
@@ -455,7 +456,7 @@ listToTuples [x, y] = [pair x y]
 listToTuples [x, y, z, w] = [pair x y, pair z w]
 listToTuples (x : y : z : xs) = triple x y z : listToTuples xs
 
--- TODO: Figure out what to do if this contains tuples
+-- mostly used for testing
 toList :: FingerTree a -> [a]
 toList Nil = []
 toList (Unit x) = [x]
@@ -464,9 +465,13 @@ toList (More _ l ft r) =
     ++ foldr (\x acc -> tupleToList x ++ acc) [] (toList ft)
     ++ someToList r
 
+-- mostly used for convenience
 fromList :: Measured a => [a] -> FingerTree a
 fromList = foldr insertHead Nil
 
+----------------
+-- QuickCheck --
+----------------
 arbitrarySizedTree :: Measured a => Arbitrary a => Int -> Gen (FingerTree a)
 arbitrarySizedTree m
   | m == 0 = return Nil
@@ -568,15 +573,3 @@ someToTreeList (Three x y z) =
     ++ [More 3 (Two y x) Nil (One z)]
     ++ [More 3 (Two z x) Nil (One y)]
     ++ [More 3 (Two z y) Nil (One x)]
-
--- ft1 :: FingerTree Int
--- ft1 = Unit 1
-
--- ft2 :: FingerTree Int
--- ft2 = More 2 (One 1) Nil (One 2)
-
--- ft3 :: FingerTree Int
--- ft3 = More 3 (One 1) Nil (Two 2 3)
-
--- ft4 :: FingerTree Int
--- ft4 = More 4 (One 1) Nil (Three 2 3 4)
