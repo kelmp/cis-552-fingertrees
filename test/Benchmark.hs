@@ -127,9 +127,9 @@ seqBench =
         (arbFTreesSeqsLists 100000 1 1 0)
         ( \ ~(fts, ss, _) ->
             bgroup
-              "ft O(1) v. list O(n) last: 100000"
+              "ft v. seq last: 100000"
               [ bench "fingertree" $ nf FT.last $ P.head fts,
-                bench "list" $ let seq = P.head ss in
+                bench "seq" $ let seq = P.head ss in
                   nf (seq !?) $ Seq.length seq
               ]
         )
