@@ -14,9 +14,9 @@ After poking around on the Internet for a bit this might have something to do wi
 
 This folder contains the main library, and should be looked at first.
 
-- `FingerTree2.hs` contains our initial FingerTree implementation, where the cached parameter used for `Measured` is locked as an `Int` (length). This is useful in a pure data structure context, and is currently used to show the random-access capabilities of finger trees in the demo.
+- `FingerTree.hs` contains our initial FingerTree implementation, where the cached parameter used for `Measured` is locked as an `Int` (length). This is useful in a pure data structure context, and is currently used to show the random-access capabilities of finger trees in the demo.
 
-- `FingerTree.hs` contains a more general FingerTree implementation, where the type used for `Measured` is any monoid. This is necessary for priority queues, where efficiently extracting the highest-priority element requires priority-based caching.
+- `FingerTree2.hs` contains a more general FingerTree implementation, where the type used for `Measured` is any monoid. This is necessary for priority queues, where efficiently extracting the highest-priority element requires priority-based caching.
 
 - `PriorityQueue.hs` contains an implementation of priority queues using FingerTrees. Extraction of the max-priority element uses a `split` operation.
 
